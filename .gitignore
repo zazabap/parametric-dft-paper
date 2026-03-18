@@ -1,1 +1,9 @@
-*.aux\n*.bbl\n*.blg\n*.log\n*.out\n*.toc\n*.pdf\n*.fdb_latexmk\n*.fls\n*.synctex.gz
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.toc
+*.fdb_latexmk
+*.fls
+*.synctex.gz
