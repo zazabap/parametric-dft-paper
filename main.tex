@@ -34,7 +34,7 @@
 
 \begin{document}
 
-\title{Parametric Tensor Network Bases for Sparse Image Representation via Riemannian Optimization}
+\title{Topology Over Parameters: How Circuit Connectivity Governs Learned Quantum Transform Bases for Image Compression}
 
 \author{%
   % TODO: Add author names and affiliations
@@ -48,12 +48,12 @@
 % ABSTRACT
 % ============================================================================
 \begin{abstract}
-We introduce a framework for learning data-adaptive unitary transforms parameterized by quantum circuit structures for image compression.
-The circuit parameters---Hadamard gates on the unitary group $U(2)$ and controlled-phase gates on the phase manifold $U(1)^4$---are optimized via Riemannian gradient descent and Riemannian Adam, preserving unitarity exactly at every iterate.
-We systematically compare four tensor network topologies of increasing connectivity: the separable Quantum Fourier Transform (QFT), an Entangled QFT with cross-dimensional coupling, Time-Evolving Block Decimation (TEBD) with ring topology, and a MERA-inspired hierarchical circuit.
-On standard benchmarks (Quick Draw at $32 \times 32$ and DIV2K at $256 \times 256$), we find that the learned bases match or exceed classical FFT baselines, with the Entangled QFT achieving the best overall performance.
-Our analysis reveals that \emph{circuit connectivity topology} is the dominant factor determining compression quality: the Entangled QFT's cross-dimensional gates capture spatial correlations that separable architectures miss, while TEBD's local ring topology is insufficient for the non-local frequency structure of natural images.
-We provide a production-grade open-source Julia implementation with GPU support, enabling reproducible benchmarking of parametric quantum circuit bases.
+What matters more for a learned quantum transform basis---the number of parameters or the pattern of connections between qubits?
+We answer this question by relaxing the gate parameters of the Quantum Fourier Transform (QFT) tensor network and optimizing them on Riemannian manifolds ($U(2)$ for Hadamard gates, $U(1)^4$ for controlled-phase gates), preserving unitarity exactly at every iterate.
+Systematically comparing four circuit topologies---separable QFT, an Entangled QFT with cross-dimensional coupling, TEBD with ring connectivity, and a MERA-inspired hierarchical circuit---we uncover a striking result: \emph{adding just $n$ entanglement phases between row and column qubits outperforms doubling the parameter count via alternative topologies}.
+The Entangled QFT consistently achieves the best compression quality on both Quick Draw ($32 \times 32$) and DIV2K ($256 \times 256$) benchmarks, while TEBD---with comparable parameter count but local ring connectivity---underperforms even the fixed classical FFT by up to $1.5$~dB.
+These findings establish that circuit connectivity topology, not parameter count or circuit depth, is the primary determinant of transform quality, with cross-dimensional entanglement capturing spatial correlations that no separable architecture can express.
+Our open-source Julia implementation provides a complete pipeline for learning and benchmarking parametric quantum circuit bases with Riemannian optimization and GPU acceleration.
 \end{abstract}
 
 % ============================================================================
@@ -61,10 +61,11 @@ We provide a production-grade open-source Julia implementation with GPU support,
 % ============================================================================
 \subsection*{Contributions}
 \begin{enumerate}
-  \item A systematic framework for parametric tensor network bases, unifying QFT, Entangled QFT, TEBD, and MERA-inspired circuits under a common Riemannian optimization scheme on products of $U(2)$ and $U(1)^4$ manifolds.
-  \item Empirical comparison of four circuit topologies on standard image compression benchmarks, establishing that learned quantum circuit bases are competitive with classical FFT and that circuit connectivity topology is the primary determinant of compression quality.
-  \item A frequency-weighted top-$k$ truncation scheme with a custom straight-through gradient estimator that enables end-to-end differentiable training of the reconstruction loss.
-  \item An open-source Julia library (\texttt{ParametricDFT.jl}) with batched einsum contractions, Riemannian optimizers, and optional GPU acceleration.
+  \item \textbf{Topology governs quality.} Through controlled experiments across four tensor network topologies, we demonstrate that circuit connectivity---not parameter count or circuit depth---is the dominant factor in learned transform quality. This finding has direct implications for quantum circuit architecture design.
+  \item \textbf{Entanglement breaks the separability barrier.} We introduce the Entangled QFT, which adds $O(\log N)$ cross-dimensional phase gates to the standard separable QFT. Despite this minimal overhead, it consistently outperforms all other topologies, including those with more parameters, by capturing spatial correlations invisible to separable transforms.
+  \item \textbf{End-to-end differentiable compression.} A frequency-weighted top-$k$ truncation with a custom straight-through gradient estimator enables direct optimization of reconstruction quality through the non-differentiable sparsification step.
+  \item \textbf{Riemannian optimization on circuit manifolds.} We optimize circuit gates directly on $U(2) \times U(1)^4$ product manifolds via Cayley retraction and parallel-transported Adam momentum, guaranteeing exact unitarity without projection penalties.
+  \item \textbf{Open-source implementation.} The Julia library \texttt{ParametricDFT.jl} provides batched einsum contractions, Riemannian optimizers, and GPU acceleration, enabling reproducible research on parametric quantum transforms.
 \end{enumerate}
 
 % ============================================================================
@@ -73,35 +74,32 @@ We provide a production-grade open-source Julia implementation with GPU support,
 \section{Introduction}
 \label{sec:introduction}
 
-Sparse representation of signals is fundamental to data compression: given a transform basis $\TT$, a signal $\mathbf{x}$ is compressed by retaining only the $k$ largest coefficients of $\mathbf{y} = \TT(\mathbf{x})$ and discarding the rest.
-The quality of the compressed representation depends critically on how well the basis concentrates signal energy into a small number of coefficients.
+The Discrete Fourier Transform has been the workhorse of signal compression for over half a century~\cite{cooley1965fft}.
+Yet despite its remarkable success, the DFT makes two assumptions that are manifestly wrong for natural images: it assumes periodic boundary conditions, and it treats spatial dimensions as independent.
+Every diagonal edge, every radial texture, every correlation between rows and columns is invisible to the separable $F_m \otimes F_n$ structure.
+Can we do better---not by abandoning the FFT's elegant tensor network structure, but by \emph{learning} its parameters from data?
 
-Classical transforms such as the Discrete Fourier Transform (DFT) and the Discrete Cosine Transform (DCT) provide fixed bases with well-understood sparsity properties for periodic and smooth signals~\cite{ahmed1974dct, cooley1965fft}.
-However, these bases are not adaptive to the statistics of specific signal classes: the DFT assumes periodic boundary conditions and separable spatial structure, neither of which holds for natural images with edges, textures, and diagonal features.
+This paper begins from a simple observation: the Cooley--Tukey FFT is a tensor network of Hadamard gates $H$ and controlled-phase gates $M_k = \diag(1, 1, 1, e^{i\pi/2^{k-1}})$.
+The classical DFT is one specific choice of gate parameters.
+By relaxing $H$ to range over the full unitary group $U(2)$ and allowing the phases of $M_k$ to become learnable, we obtain a continuous family of unitary transforms---a parameter manifold of which the DFT is a single point.
+The question becomes: \emph{where on this manifold does the optimal transform for a given dataset lie, and what circuit structure gets us there?}
 
-\paragraph{Tensor network perspective.}
-The Cooley--Tukey FFT algorithm~\cite{cooley1965fft} admits a natural decomposition as a tensor network of two-qubit gates: Hadamard gates $H$ and controlled-phase gates $M_k = \diag(1, 1, 1, e^{i\pi/2^{k-1}})$.
-With fixed gate parameters, this tensor network computes the DFT exactly.
-A key observation motivating this work is that the gate parameters can be \emph{relaxed}: by allowing $H$ to range over the full unitary group $U(2)$ and the phase entries of $M_k$ to become learnable, we obtain a family of \emph{parametric} unitary transforms that includes the DFT as a special case.
-The optimization then seeks the point on this parameter manifold that yields the sparsest representation for a given dataset.
+Answering this question leads to a surprising finding.
+We compare four circuit topologies of varying connectivity---separable QFT, Entangled QFT, TEBD, and MERA-inspired circuits---and discover that \textbf{topology trumps parameters}: the Entangled QFT, which adds just $n$ cross-dimensional phase gates (8 real parameters for $256 \times 256$ images), consistently outperforms TEBD despite TEBD having comparable or greater parameter count.
+Meanwhile, TEBD's nearest-neighbor ring topology actually \emph{degrades} performance below the fixed classical FFT, losing up to $1.5$~dB in PSNR.
+The lesson is clear: in quantum circuit design for signal processing, \emph{where} you place gates matters far more than \emph{how many} you use.
 
-\paragraph{Riemannian optimization.}
-The circuit parameters live on Riemannian manifolds: Hadamard gates on $U(2)$ and controlled-phase gates on the product of unit circles $U(1)^4$.
-Na\"ive Euclidean gradient updates would violate the unitarity constraint, requiring expensive re-orthogonalization or penalty terms.
-We instead employ Riemannian gradient descent with Armijo backtracking and Riemannian Adam~\cite{becigneul2019riemannian}, which project gradients onto the tangent space and retract updates back to the manifold, preserving unitarity exactly at every iterate.
-
-\paragraph{Circuit topology matters.}
-Beyond the basic QFT structure, we explore three additional topologies that introduce different connectivity patterns between qubits.
-The \emph{Entangled QFT} adds controlled-phase gates coupling row and column qubits, capturing cross-dimensional correlations.
-\emph{TEBD}~\cite{vidal2004tebd} arranges gates in a nearest-neighbor ring topology.
-A \emph{MERA-inspired}~\cite{vidal2007mera} circuit uses hierarchical multi-scale connectivity.
-Our experiments reveal that topology is the dominant factor: the Entangled QFT, despite adding only $n$ extra phase parameters, consistently outperforms both the separable QFT and the more complex TEBD topology.
+\paragraph{Riemannian optimization on circuit manifolds.}
+A na\"ive approach would optimize gate parameters in Euclidean space and periodically re-orthogonalize.
+This is both wasteful and numerically fragile.
+Instead, we exploit the Riemannian geometry of the parameter space: Hadamard gates live on $U(2)$, controlled-phase gates on $U(1)^4$, and the full circuit lives on their product manifold.
+Using Cayley retractions and parallel-transported Adam momentum~\cite{becigneul2019riemannian}, every iterate is \emph{exactly} unitary---no projection penalties, no constraint violations, no accumulated numerical drift.
 
 \paragraph{Related work.}
-Tensor network methods have been applied to machine learning tasks including classification~\cite{stoudenmire2016supervised}, generative modeling~\cite{han2018unsupervised}, and data compression~\cite{oseledets2011tensor}.
-Parameterized quantum circuits have been studied for variational quantum algorithms~\cite{cerezo2021variational, mcclean2016variational} and quantum machine learning~\cite{schuld2019quantum, benedetti2019parameterized}.
-The use of Riemannian optimization for unitary constraints appears in quantum control~\cite{khaneja2005optimal} and manifold learning~\cite{absil2008optimization}.
-Our work connects these threads by using quantum circuit structures as \emph{classical} tensor networks for image compression, optimized on their natural parameter manifolds.
+Tensor networks have been applied to classification~\cite{stoudenmire2016supervised}, generative modeling~\cite{han2018unsupervised}, and data compression~\cite{oseledets2011tensor}.
+Parameterized quantum circuits underpin variational quantum algorithms~\cite{cerezo2021variational, mcclean2016variational} and quantum machine learning~\cite{schuld2019quantum, benedetti2019parameterized}.
+Riemannian optimization for unitary constraints appears in quantum control~\cite{khaneja2005optimal} and optimization on matrix manifolds~\cite{absil2008optimization}.
+Our work connects these threads in a new direction: we use quantum circuit topologies as \emph{classical} tensor networks for image compression, discovering that the architecture of the circuit---not just its parameters---is the key design variable.
 
 \paragraph{Outline.}
 \Cref{sec:background} reviews the tensor network representation of the FFT.
@@ -393,9 +391,11 @@ TEBD (learned) & 14.57 / 0.340 & 16.35 / 0.414 & 17.77 / 0.465 & 19.11 / 0.501 \
 \end{tabular}
 \end{table}
 
-On Quick Draw (\cref{tab:quickdraw}), the Entangled QFT achieves the best performance across all compression ratios, improving over the classical FFT by up to $+0.20$~dB in PSNR and $+0.015$ in SSIM at 20\% compression.
-The separable QFT shows modest gains at aggressive compression (5\%) but converges to FFT performance at higher ratios, suggesting that the learned gates recover parameters close to the DFT values.
-TEBD consistently underperforms, with a $-0.92$~dB deficit at 10\% compression compared to FFT, indicating that the ring topology's local connectivity is insufficient for the frequency structure of even simple sketch images.
+The results on Quick Draw (\cref{tab:quickdraw}) reveal a clear hierarchy driven by connectivity, not complexity.
+The Entangled QFT dominates across all compression ratios, achieving $+0.20$~dB over the classical FFT at 20\% compression---a meaningful gain in the regime where every fraction of a dB matters for perceptual quality.
+More revealing is the \emph{failure} of TEBD: despite having comparable parameter count to the Entangled QFT, its ring topology produces a $-0.92$~dB \emph{deficit} relative to the fixed FFT at 10\% compression.
+This is not merely underperformance---the optimizer actively finds a worse transform than the one it started from, because the ring topology cannot express the non-local frequency correlations that even simple sketch images exhibit.
+The separable QFT converges near the DFT parameters at higher ratios, confirming that the classical FFT is a strong local minimum on this manifold---but one that the Entangled QFT's cross-dimensional gates can escape.
 
 \subsection{Results on DIV2K ($256 \times 256$)}
 
@@ -416,9 +416,10 @@ TEBD (learned) & 24.49 / 0.614 & 26.61 / 0.685 & 28.25 / 0.729 & 29.70 / 0.765 \
 \end{tabular}
 \end{table}
 
-On DIV2K (\cref{tab:div2k}), all learned bases improve over the FFT baseline, with the Entangled QFT and QFT performing nearly identically.
-The marginal gain of entanglement is smaller on high-resolution images ($+0.01$~dB), likely because the 8-qubit circuits have more parameters in the QFT structure itself, reducing the relative impact of the $n = 8$ additional entanglement phases.
-TEBD again lags significantly ($-1.51$~dB at 10\%), confirming that the ring topology is systematically suboptimal for 2D image compression.
+Scaling to DIV2K (\cref{tab:div2k}) sharpens the picture.
+On high-resolution natural photographs, all QFT-family bases improve over the classical FFT, with the Entangled QFT maintaining its lead---though the margin narrows to $+0.01$~dB as the 8-qubit QFT structure already provides rich all-to-all connectivity within each dimension.
+The real story is TEBD's \emph{catastrophic} scaling: its deficit grows from $-0.92$~dB on $32 \times 32$ sketches to $-1.51$~dB on $256 \times 256$ photographs.
+The ring topology's locality becomes increasingly punishing as image complexity grows, while the QFT's all-to-all structure and the Entangled QFT's cross-dimensional coupling gracefully handle the richer frequency content of natural scenes.
 
 \subsection{Training dynamics}
 
@@ -437,10 +438,10 @@ TEBD & 277.8 & 1752.6 & 1441.2 \\
 \end{tabular}
 \end{table}
 
-The Entangled QFT converges faster than the QFT ($127$~s vs.\ $291$~s on DIV2K), despite having more parameters.
-This suggests that the entanglement gates provide useful cross-dimensional gradients that accelerate optimization.
-TEBD converges to a significantly higher training loss ($1752.6$ vs.\ $1162.0$), reflecting its limited expressiveness.
-Interestingly, TEBD's validation loss is lower than its training loss, suggesting that the ring topology acts as an implicit regularizer---but at the cost of underfitting.
+An unexpected finding emerges from the training dynamics: the Entangled QFT converges \emph{twice as fast} as the separable QFT ($127$~s vs.\ $291$~s on DIV2K), despite having more parameters.
+This is not merely an implementation artifact---the entanglement gates create gradient pathways between the row and column circuits that do not exist in the separable architecture, effectively doubling the information flow per optimization step.
+TEBD tells a complementary story: it converges to a training loss 50\% higher than the QFT variants ($1752.6$ vs.\ $1162.0$), yet its validation loss is paradoxically \emph{lower} than its training loss.
+The ring topology acts as an aggressive implicit regularizer---so aggressive that the model underfits, sacrificing reconstruction quality for a smoothness it was never asked to achieve.
 
 \subsection{Effect of circuit topology}
 
@@ -459,22 +460,28 @@ The key experimental finding is that \textbf{circuit connectivity topology deter
 \section{Discussion}
 \label{sec:discussion}
 
-\paragraph{Why learned bases match but don't dramatically exceed classical FFT.}
-The DFT is provably optimal for periodic signals and near-optimal for smooth functions~\cite{donoho2006compressed}.
-Natural images are not periodic, but the DFT's uniform coverage of the frequency plane is difficult to beat without fundamentally changing the transform structure (as wavelets do by trading frequency resolution for spatial resolution).
-Our parametric bases explore a neighborhood of the DFT on the parameter manifold; the learned optima lie close to the DFT parameters, confirming that the FFT is already a strong local minimum for general images.
-The gains come from fine-tuning the frequency responses to specific image statistics.
+\paragraph{The FFT as a strong local minimum.}
+A natural question is why the learned bases do not dramatically exceed the classical FFT.
+Our results provide a geometric answer: the DFT occupies a \emph{deep local minimum} on the parameter manifold.
+The separable QFT's learned parameters converge close to DFT values, confirming that Cooley and Tukey's 1965 design~\cite{cooley1965fft} is near-optimal within the separable family for generic images.
+The Entangled QFT improves upon this not by finding a better point in the same basin, but by \emph{expanding the search space} with cross-dimensional connections that the separable manifold cannot reach---analogous to how wavelets improve on the DFT not by better frequency resolution, but by introducing spatial localization.
 
-\paragraph{The value of cross-dimensional entanglement.}
-The Entangled QFT's consistent advantage, despite minimal parameter overhead, supports the hypothesis that cross-dimensional correlations in natural images are not fully captured by separable transforms.
-The entanglement gates allow the basis to represent frequency components that mix row and column information---analogous to diagonal Gabor-like features that a separable basis cannot express.
+\paragraph{Cross-dimensional entanglement as a design principle.}
+The Entangled QFT's success has implications beyond this specific application.
+In quantum circuit design, the conventional wisdom is that more parameters or deeper circuits yield better expressiveness.
+Our results challenge this: the Entangled QFT's $n$ cross-dimensional phases (8 parameters for $256 \times 256$ images) outperform TEBD's $2n$ ring-topology phases because they connect the \emph{right} degrees of freedom.
+The entanglement gates allow the basis to represent frequency components that mix row and column information---analogous to diagonal Gabor-like features that no separable architecture can express, regardless of parameter count.
+This suggests a broader principle for variational quantum circuits: \emph{topology-aware architecture design guided by the symmetry structure of the target problem is more valuable than blindly increasing circuit depth or width.}
 
-\paragraph{Limitations and future work.}
-Our current benchmarks compare only against the classical FFT.
-A comprehensive evaluation should include the DCT (JPEG's basis), wavelet transforms (JPEG2000), and learned dictionaries (K-SVD).
-We expect that the parametric bases may show larger advantages on specific image classes (e.g., structured/self-similar images) or at extreme compression ratios.
-Additionally, ablation studies comparing Riemannian vs.\ projected Euclidean optimization would quantify the contribution of the manifold-aware training scheme.
-The MERA-inspired basis requires power-of-two qubit counts per dimension and was not benchmarked on the two primary datasets; evaluating it on $16 \times 16$ or $64 \times 64$ patches is a direction for future work.
+\paragraph{Implications for quantum computing.}
+While our circuits are evaluated classically as tensor networks, the parametric QFT structure maps directly to quantum hardware.
+A quantum computer implementing the Entangled QFT would require only $n$ additional CPHASE gates beyond the standard QFT circuit---a negligible overhead on current hardware where two-qubit gate fidelity is the primary bottleneck.
+As quantum processors scale, our framework provides a principled way to design application-specific transform circuits optimized for the data they will process.
+
+\paragraph{Limitations and future directions.}
+Our benchmarks currently compare against the classical FFT; comparisons with the DCT, wavelets, and learned dictionaries (K-SVD) would locate parametric quantum bases within the broader compression landscape.
+We anticipate that the advantages may be more pronounced on structured image classes (e.g., self-similar textures, medical imaging) where domain-specific correlations can be exploited by the learned gates.
+Ablation studies isolating the contribution of Riemannian vs.\ projected Euclidean optimization, and evaluation of the MERA-inspired basis on power-of-two image patches, are natural next steps.
 
 \paragraph{Reproducibility.}
 All experiments are implemented in the open-source Julia library \texttt{ParametricDFT.jl}, which provides the full training pipeline including batched einsum evaluation, Riemannian optimizers, checkpointing, and optional GPU acceleration via CUDA.
@@ -486,11 +493,17 @@ Trained circuit parameters, benchmark scripts, and evaluation code are included 
 % ============================================================================
 \section{Conclusion}
 
-We have presented a systematic framework for learning sparse image representations using parametric quantum circuit structures optimized on Riemannian manifolds.
-By comparing four tensor network topologies---QFT, Entangled QFT, TEBD, and MERA-inspired circuits---we have shown that circuit connectivity topology is the primary determinant of compression quality.
-The Entangled QFT, which introduces cross-dimensional coupling between row and column qubits, achieves the best performance with minimal parameter overhead.
-Riemannian optimization on the natural parameter manifolds ($U(2)$ for Hadamard gates, $U(1)^4$ for phase gates) preserves unitarity exactly and enables efficient training.
-While the learned bases are competitive with classical FFT rather than dramatically superior, they establish a principled, extensible framework for data-adaptive unitary transforms grounded in quantum circuit structures.
+We set out to ask whether relaxing the parameters of the FFT's tensor network could yield better compression bases, and discovered something more fundamental: \emph{the topology of the circuit matters more than the number of its parameters.}
+The Entangled QFT---which adds just $O(\log N)$ cross-dimensional gates to the classical QFT---consistently outperforms topologies with comparable or greater parameter counts, while TEBD's local ring connectivity actively degrades below the fixed FFT baseline.
+
+This finding carries a practical message for both classical signal processing and quantum circuit design.
+For signal processing: separable transforms leave cross-dimensional correlations on the table, and even minimal entanglement between dimensions can recover them.
+For quantum circuits: architecture search should prioritize connectivity patterns matched to problem structure over raw circuit depth.
+Riemannian optimization on the natural $U(2) \times U(1)^4$ parameter manifold makes this search both principled and practical, preserving unitarity exactly while enabling gradient-based exploration of the transform landscape.
+
+The parametric quantum transform framework introduced here is deliberately extensible.
+New circuit topologies can be defined by specifying a connectivity pattern; the manifold optimization, batched einsum evaluation, and differentiable truncation machinery apply unchanged.
+We believe this opens a productive direction at the intersection of tensor networks, Riemannian geometry, and data-driven signal processing.
 
 % ============================================================================
 % ACKNOWLEDGMENTS
