@@ -1,4 +1,5 @@
 \documentclass[a4paper, 11pt]{quantumarticle}
+\pdfoutput=1
 
 \usepackage{amsmath, amssymb, amsthm}
 \usepackage{graphicx}
@@ -8,7 +9,7 @@
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 \usepackage{tikz}
-\usetikzlibrary{quantikz2}
+% \usetikzlibrary{quantikz2}  % TODO: enable when adding circuit diagrams
 \usepackage{braket}
 \usepackage{multirow}
 \usepackage{xcolor}
@@ -26,7 +27,7 @@
 \newcommand{\II}{\mathbb{I}}
 \newcommand{\tr}{\operatorname{tr}}
 \newcommand{\diag}{\operatorname{diag}}
-\newcommand{\skew}{\operatorname{skew}}
+\renewcommand{\skew}{\operatorname{skew}}
 \newcommand{\topk}{\operatorname{topk}}
 \newcommand{\grad}{\operatorname{grad}}
 \newcommand{\proj}{\operatorname{proj}}
@@ -39,7 +40,7 @@
   % TODO: Add author names and affiliations
   Author One\textsuperscript{1}
 }
-\date{\today}
+\date{2026-03-18}
 
 \maketitle
 
@@ -136,7 +137,7 @@ where $D_{n/2} = \diag(1, \omega, \omega^2, \ldots, \omega^{n/2-1})$ is the twid
 In tensor network notation, a vector of size $2^k$ is a rank-$k$ tensor with binary indices $q_0, q_1, \ldots, q_{k-1}$.
 The butterfly structure of~\cref{eq:fft} decomposes into:
 \begin{itemize}
-  \item \textbf{Hadamard gates}: $H = \begin{psmallmatrix} 1 & 1 \\ 1 & -1 \end{psmallmatrix}$, one per qubit.
+  \item \textbf{Hadamard gates}: $H = \left(\begin{smallmatrix} 1 & 1 \\ 1 & -1 \end{smallmatrix}\right)$, one per qubit.
   \item \textbf{Controlled-phase gates}: $M_k = \diag(1, 1, 1, e^{i\pi/2^{k-1}})$, connecting each pair of qubits at distance $k$ in the recursive decomposition.
 \end{itemize}
 Recursive application yields $k$ Hadamard gates and $k(k-1)/2$ controlled-phase gates for $k$ qubits, evaluable in $O(2^k \cdot k)$ operations via optimized tensor contraction---matching the classical FFT complexity $O(N \log N)$ for $N = 2^k$.
