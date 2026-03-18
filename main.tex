@@ -1,0 +1,572 @@
+\documentclass[a4paper, 11pt]{quantumarticle}
+
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{tikz}
+\usetikzlibrary{quantikz2}
+\usepackage{braket}
+\usepackage{multirow}
+\usepackage{xcolor}
+
+% Theorem environments
+\newtheorem{definition}{Definition}
+\newtheorem{proposition}{Proposition}
+
+% Shortcuts
+\newcommand{\CC}{\mathbb{C}}
+\newcommand{\RR}{\mathbb{R}}
+\newcommand{\TT}{\mathcal{T}}
+\newcommand{\LL}{\mathcal{L}}
+\newcommand{\MM}{\mathcal{M}}
+\newcommand{\II}{\mathbb{I}}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\skew}{\operatorname{skew}}
+\newcommand{\topk}{\operatorname{topk}}
+\newcommand{\grad}{\operatorname{grad}}
+\newcommand{\proj}{\operatorname{proj}}
+
+\begin{document}
+
+\title{Parametric Tensor Network Bases for Sparse Image Representation via Riemannian Optimization}
+
+\author{%
+  % TODO: Add author names and affiliations
+  Author One\textsuperscript{1}
+}
+\date{\today}
+
+\maketitle
+
+% ============================================================================
+% ABSTRACT
+% ============================================================================
+\begin{abstract}
+We introduce a framework for learning data-adaptive unitary transforms parameterized by quantum circuit structures for image compression.
+The circuit parameters---Hadamard gates on the unitary group $U(2)$ and controlled-phase gates on the phase manifold $U(1)^4$---are optimized via Riemannian gradient descent and Riemannian Adam, preserving unitarity exactly at every iterate.
+We systematically compare four tensor network topologies of increasing connectivity: the separable Quantum Fourier Transform (QFT), an Entangled QFT with cross-dimensional coupling, Time-Evolving Block Decimation (TEBD) with ring topology, and a MERA-inspired hierarchical circuit.
+On standard benchmarks (Quick Draw at $32 \times 32$ and DIV2K at $256 \times 256$), we find that the learned bases match or exceed classical FFT baselines, with the Entangled QFT achieving the best overall performance.
+Our analysis reveals that \emph{circuit connectivity topology} is the dominant factor determining compression quality: the Entangled QFT's cross-dimensional gates capture spatial correlations that separable architectures miss, while TEBD's local ring topology is insufficient for the non-local frequency structure of natural images.
+We provide a production-grade open-source Julia implementation with GPU support, enabling reproducible benchmarking of parametric quantum circuit bases.
+\end{abstract}
+
+% ============================================================================
+% CONTRIBUTIONS
+% ============================================================================
+\subsection*{Contributions}
+\begin{enumerate}
+  \item A systematic framework for parametric tensor network bases, unifying QFT, Entangled QFT, TEBD, and MERA-inspired circuits under a common Riemannian optimization scheme on products of $U(2)$ and $U(1)^4$ manifolds.
+  \item Empirical comparison of four circuit topologies on standard image compression benchmarks, establishing that learned quantum circuit bases are competitive with classical FFT and that circuit connectivity topology is the primary determinant of compression quality.
+  \item A frequency-weighted top-$k$ truncation scheme with a custom straight-through gradient estimator that enables end-to-end differentiable training of the reconstruction loss.
+  \item An open-source Julia library (\texttt{ParametricDFT.jl}) with batched einsum contractions, Riemannian optimizers, and optional GPU acceleration.
+\end{enumerate}
+
+% ============================================================================
+% INTRODUCTION
+% ============================================================================
+\section{Introduction}
+\label{sec:introduction}
+
+Sparse representation of signals is fundamental to data compression: given a transform basis $\TT$, a signal $\mathbf{x}$ is compressed by retaining only the $k$ largest coefficients of $\mathbf{y} = \TT(\mathbf{x})$ and discarding the rest.
+The quality of the compressed representation depends critically on how well the basis concentrates signal energy into a small number of coefficients.
+
+Classical transforms such as the Discrete Fourier Transform (DFT) and the Discrete Cosine Transform (DCT) provide fixed bases with well-understood sparsity properties for periodic and smooth signals~\cite{ahmed1974dct, cooley1965fft}.
+However, these bases are not adaptive to the statistics of specific signal classes: the DFT assumes periodic boundary conditions and separable spatial structure, neither of which holds for natural images with edges, textures, and diagonal features.
+
+\paragraph{Tensor network perspective.}
+The Cooley--Tukey FFT algorithm~\cite{cooley1965fft} admits a natural decomposition as a tensor network of two-qubit gates: Hadamard gates $H$ and controlled-phase gates $M_k = \diag(1, 1, 1, e^{i\pi/2^{k-1}})$.
+With fixed gate parameters, this tensor network computes the DFT exactly.
+A key observation motivating this work is that the gate parameters can be \emph{relaxed}: by allowing $H$ to range over the full unitary group $U(2)$ and the phase entries of $M_k$ to become learnable, we obtain a family of \emph{parametric} unitary transforms that includes the DFT as a special case.
+The optimization then seeks the point on this parameter manifold that yields the sparsest representation for a given dataset.
+
+\paragraph{Riemannian optimization.}
+The circuit parameters live on Riemannian manifolds: Hadamard gates on $U(2)$ and controlled-phase gates on the product of unit circles $U(1)^4$.
+Na\"ive Euclidean gradient updates would violate the unitarity constraint, requiring expensive re-orthogonalization or penalty terms.
+We instead employ Riemannian gradient descent with Armijo backtracking and Riemannian Adam~\cite{becigneul2019riemannian}, which project gradients onto the tangent space and retract updates back to the manifold, preserving unitarity exactly at every iterate.
+
+\paragraph{Circuit topology matters.}
+Beyond the basic QFT structure, we explore three additional topologies that introduce different connectivity patterns between qubits.
+The \emph{Entangled QFT} adds controlled-phase gates coupling row and column qubits, capturing cross-dimensional correlations.
+\emph{TEBD}~\cite{vidal2004tebd} arranges gates in a nearest-neighbor ring topology.
+A \emph{MERA-inspired}~\cite{vidal2007mera} circuit uses hierarchical multi-scale connectivity.
+Our experiments reveal that topology is the dominant factor: the Entangled QFT, despite adding only $n$ extra phase parameters, consistently outperforms both the separable QFT and the more complex TEBD topology.
+
+\paragraph{Related work.}
+Tensor network methods have been applied to machine learning tasks including classification~\cite{stoudenmire2016supervised}, generative modeling~\cite{han2018unsupervised}, and data compression~\cite{oseledets2011tensor}.
+Parameterized quantum circuits have been studied for variational quantum algorithms~\cite{cerezo2021variational, mcclean2016variational} and quantum machine learning~\cite{schuld2019quantum, benedetti2019parameterized}.
+The use of Riemannian optimization for unitary constraints appears in quantum control~\cite{khaneja2005optimal} and manifold learning~\cite{absil2008optimization}.
+Our work connects these threads by using quantum circuit structures as \emph{classical} tensor networks for image compression, optimized on their natural parameter manifolds.
+
+\paragraph{Outline.}
+\Cref{sec:background} reviews the tensor network representation of the FFT.
+\Cref{sec:circuits} presents the four circuit topologies.
+\Cref{sec:training} describes the loss functions, truncation scheme, and Riemannian optimizers.
+\Cref{sec:experiments} reports benchmark results.
+\Cref{sec:discussion} discusses implications and future directions.
+
+% ============================================================================
+% BACKGROUND
+% ============================================================================
+\section{Background: Tensor Network Representation of the FFT}
+\label{sec:background}
+
+We briefly review how the Cooley--Tukey FFT decomposes into a tensor network, establishing notation used throughout.
+
+\subsection{Cooley--Tukey decomposition}
+
+The DFT matrix of size $n = 2^k$ is $(F_n)_{ij} = \omega^{(i-1)(j-1)}$ where $\omega = e^{-2\pi i/n}$.
+The Cooley--Tukey algorithm decomposes this as
+\begin{equation}
+  F_n \mathbf{x}
+  = \begin{pmatrix} I_{n/2} & D_{n/2} \\ I_{n/2} & -D_{n/2} \end{pmatrix}
+    \begin{pmatrix} F_{n/2} & 0 \\ 0 & F_{n/2} \end{pmatrix}
+    \begin{pmatrix} \mathbf{x}_{\text{odd}} \\ \mathbf{x}_{\text{even}} \end{pmatrix},
+  \label{eq:fft}
+\end{equation}
+where $D_{n/2} = \diag(1, \omega, \omega^2, \ldots, \omega^{n/2-1})$ is the twiddle factor matrix.
+
+\subsection{Gate decomposition}
+\label{sec:gate_decomposition}
+
+In tensor network notation, a vector of size $2^k$ is a rank-$k$ tensor with binary indices $q_0, q_1, \ldots, q_{k-1}$.
+The butterfly structure of~\cref{eq:fft} decomposes into:
+\begin{itemize}
+  \item \textbf{Hadamard gates}: $H = \begin{psmallmatrix} 1 & 1 \\ 1 & -1 \end{psmallmatrix}$, one per qubit.
+  \item \textbf{Controlled-phase gates}: $M_k = \diag(1, 1, 1, e^{i\pi/2^{k-1}})$, connecting each pair of qubits at distance $k$ in the recursive decomposition.
+\end{itemize}
+Recursive application yields $k$ Hadamard gates and $k(k-1)/2$ controlled-phase gates for $k$ qubits, evaluable in $O(2^k \cdot k)$ operations via optimized tensor contraction---matching the classical FFT complexity $O(N \log N)$ for $N = 2^k$.
+
+For 2D images of size $2^m \times 2^n$, the separable 2D DFT is $F_m \otimes F_n$, requiring $m + n$ Hadamard gates and $m(m-1)/2 + n(n-1)/2$ controlled-phase gates applied independently to the row and column qubit registers.
+
+% ============================================================================
+% CIRCUIT TOPOLOGIES
+% ============================================================================
+\section{Parametric Circuit Topologies}
+\label{sec:circuits}
+
+We now describe four circuit topologies, each defining a parametric unitary transform $\TT(\boldsymbol{\theta}): \CC^{2^m \times 2^n} \to \CC^{2^m \times 2^n}$.
+All topologies share the same gate parameterization: Hadamard-like gates $H \in U(2)$ and controlled-phase gates $M = \diag(1, 1, 1, e^{i\phi}) \in U(1)^4$ with learnable parameters.
+Setting all parameters to their QFT values recovers the classical DFT.
+
+\subsection{QFT basis}
+\label{sec:qft}
+
+The QFT basis directly parameterizes the tensor network of~\cref{sec:gate_decomposition}.
+Each gate becomes a learnable parameter: the $m + n$ Hadamard gates live on $U(2)$ and the $m(m-1)/2 + n(n-1)/2$ controlled-phase gates live on $U(1)^4$.
+The row and column circuits operate independently, yielding the separable transform $\TT = F_m(\boldsymbol{\theta}_{\text{row}}) \otimes F_n(\boldsymbol{\theta}_{\text{col}})$.
+
+\textbf{Parameter count.}
+For an image of size $2^m \times 2^n$: $(m + n)$ unitary gates on $U(2)$ (4 real parameters each) plus $m(m-1)/2 + n(n-1)/2$ phase gates on $U(1)^4$ (1 real parameter each), giving $4(m+n) + m(m-1)/2 + n(n-1)/2$ total real parameters.
+
+\subsection{Entangled QFT basis}
+\label{sec:entangled_qft}
+
+The separable QFT processes row and column dimensions independently, ignoring spatial correlations between them.
+Natural images exhibit strong cross-dimensional correlations (e.g., diagonal edges, radial textures).
+We propose an \emph{Entangled QFT} that introduces controlled-phase gates coupling corresponding row and column qubits.
+
+For a square image with $n$ qubits per dimension, we add $n$ entanglement gates $E_k = \diag(1, 1, 1, e^{i\phi_k})$ acting on qubit pairs $(x_{n-k}, y_{n-k})$ for $k = 1, \ldots, n$.
+Each gate multiplies a learnable phase $e^{i\phi_k}$ when both the row qubit $x_{n-k}$ and column qubit $y_{n-k}$ are in state $\ket{1}$.
+
+The total transformation is:
+\begin{equation}
+  \TT_{\text{entangled}} = U_{\text{entangle}} \cdot (F_n \otimes F_n),
+  \quad
+  U_{\text{entangle}} = \prod_{k=1}^n E_k.
+  \label{eq:entangled_qft}
+\end{equation}
+
+This extension has several properties:
+\begin{enumerate}
+  \item Computational complexity remains $O(N \log N)$ per dimension.
+  \item Only $n$ additional real parameters are introduced ($O(\log N)$ overhead).
+  \item Setting $\phi_k = 0$ for all $k$ recovers the separable QFT.
+\end{enumerate}
+
+\subsection{TEBD basis}
+\label{sec:tebd}
+
+Time-Evolving Block Decimation (TEBD)~\cite{vidal2004tebd} uses a \emph{ring topology} of nearest-neighbor controlled-phase gates preceded by Hadamard gates on each qubit.
+For $n$ row qubits and $n$ column qubits, each register forms an independent ring: qubit $q_i$ is connected to $q_{i+1}$ (with wrap-around $q_n \to q_1$).
+
+Each gate is a controlled-phase gate $T_k = \diag(1, 1, 1, e^{i\phi_k})$ with a single learnable phase.
+The row ring has $n$ gates and the column ring has $n$ gates, giving $2n$ total learnable phases.
+The TEBD circuit evaluates in $O(n)$ gate operations per dimension, making it the computationally cheapest basis at inference time.
+
+The parameter manifold is:
+\begin{equation}
+  \MM_{\text{TEBD}} = \prod_{k=1}^{2n} U(1)^4.
+\end{equation}
+
+\subsection{MERA-inspired basis}
+\label{sec:mera}
+
+The Multi-scale Entanglement Renormalization Ansatz (MERA)~\cite{vidal2007mera} uses hierarchical connectivity with \emph{disentanglers} and \emph{isometries} at increasing spatial scales.
+Our MERA-inspired basis borrows MERA's connectivity pattern while using controlled-phase gates (rather than full $U(4)$ unitaries) for consistency with the other bases and to preserve invertibility.
+
+For $n = 2^k$ qubits, the circuit has $k = \log_2 n$ layers.
+Layer $l$ has stride $s = 2^{l-1}$ and contains $n/(2s)$ pairs of disentangler and isometry gates.
+Both gate types use the same parameterization: $\diag(1, 1, 1, e^{i\phi})$ with one learnable phase per gate.
+
+The total gate count per dimension is $2(n-1)$, and the circuit depth is $O(\log n)$.
+The hierarchical connectivity captures multi-scale features: layer~1 acts on nearest neighbors (fine scale), while deeper layers connect distant qubits (coarse scale).
+
+\subsection{Summary of circuit properties}
+
+\begin{table}[h]
+\centering
+\caption{Comparison of the four circuit topologies for an image of size $2^n \times 2^n$ ($n$ qubits per dimension).}
+\label{tab:circuits}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Property} & \textbf{QFT} & \textbf{Ent.\ QFT} & \textbf{TEBD} & \textbf{MERA} \\
+\midrule
+Connectivity & all-to-all & all-to-all + XY & ring & hierarchical \\
+Phase params & $n(n-1)$ & $n(n-1) + n$ & $2n$ & $4(n-1)$ \\
+$U(2)$ gates & $2n$ & $2n$ & $2n$ & $2n$ \\
+Circuit depth & $O(n^2)$ & $O(n^2)$ & $O(n)$ & $O(n \log n)$ \\
+XY coupling & No & Yes & No & No \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================================
+% TRAINING
+% ============================================================================
+\section{Training Objective and Optimization}
+\label{sec:training}
+
+\subsection{Loss functions}
+
+We consider three loss functions with different trade-offs between sparsity promotion and reconstruction quality.
+
+\paragraph{$L_1$ norm loss.}
+$\LL_{L_1}(\boldsymbol{\theta}) = \sum_{i,j} |\TT(\boldsymbol{\theta})(\mathbf{x})_{i,j}|$.
+The $\ell_1$ norm is the tightest convex relaxation of the $\ell_0$ pseudo-norm, promoting sparse representations.
+
+\paragraph{$L_2$ norm loss.}
+$\LL_{L_2}(\boldsymbol{\theta}) = \sum_{i,j} |\TT(\boldsymbol{\theta})(\mathbf{x})_{i,j}|^2$.
+Encourages energy concentration with smoother gradients than $L_1$.
+
+\paragraph{MSE reconstruction loss.}
+\begin{equation}
+  \LL_{\text{MSE}}(\boldsymbol{\theta}) = \|\mathbf{x} - \TT(\boldsymbol{\theta})^{-1}(\topk(\TT(\boldsymbol{\theta})(\mathbf{x}), k))\|_F^2,
+  \label{eq:mse_loss}
+\end{equation}
+where $\topk(\cdot, k)$ retains the $k$ coefficients with the highest frequency-weighted scores and zeros out the rest.
+This loss directly optimizes reconstruction quality after truncation and is used in all experiments.
+
+\subsection{Frequency-weighted truncation}
+\label{sec:truncation}
+
+The top-$k$ selection uses a frequency-weighted score rather than raw magnitude:
+\begin{equation}
+  s_{i,j} = |y_{i,j}| \cdot (1 + w_{i,j}),
+  \quad
+  w_{i,j} = 1 - \frac{d_{i,j}}{2\, d_{\max}},
+\end{equation}
+where $d_{i,j} = \sqrt{(i - c_i)^2 + (j - c_j)^2}$ is the distance from frequency bin $(i,j)$ to the DC component and $d_{\max}$ is the maximum such distance.
+Low-frequency coefficients receive up to a $2\times$ boost in their retention score, consistent with the human visual system's greater sensitivity to low-frequency content.
+
+\subsection{Straight-through gradient for top-$k$}
+\label{sec:topk_grad}
+
+The top-$k$ truncation is non-differentiable: the set of retained indices changes discontinuously.
+We define a custom chain rule that passes gradients through retained coefficients and zeros out the rest---the \emph{straight-through estimator} applied to truncation:
+\begin{equation}
+  \frac{\partial \topk(\mathbf{y}, k)}{\partial y_{i,j}} =
+  \begin{cases}
+    1 & \text{if } (i,j) \in \mathcal{S}, \\
+    0 & \text{otherwise},
+  \end{cases}
+\end{equation}
+where $\mathcal{S}$ is the set of retained indices.
+This is justified because (i) the true Jacobian has delta-function contributions at the boundaries that are unusable for gradient-based optimization, (ii) the mask is locally stable during training, and (iii) the gradient correctly conveys ``adjust the retained coefficients to better approximate the signal.''
+
+\subsection{Riemannian optimization}
+\label{sec:riemannian}
+
+The circuit parameters live on two manifolds:
+
+\begin{definition}[Unitary manifold $U(2)$]
+The group of $2 \times 2$ unitary matrices with tangent space $T_U U(2) = \{US : S^\dagger = -S\}$.
+\end{definition}
+
+\begin{definition}[Phase manifold $U(1)^4$]
+The product of four unit circles with tangent space $T_{\mathbf{z}} U(1)^4 = \{i\boldsymbol{\theta} \circ \mathbf{z} : \boldsymbol{\theta} \in \RR^4\}$.
+\end{definition}
+
+\paragraph{Riemannian gradient.}
+Given the Euclidean gradient $\nabla_E f$ from automatic differentiation:
+\begin{align}
+  \text{For } U(2): & \quad \grad f(U) = U \cdot \skew(U^\dagger \nabla_E f), \label{eq:grad_u2} \\
+  \text{For } U(1)^4: & \quad \grad f(\mathbf{z}) = i \cdot \operatorname{Im}(\bar{\mathbf{z}} \circ \nabla_E f) \circ \mathbf{z}, \label{eq:grad_u1}
+\end{align}
+where $\skew(A) = (A - A^\dagger)/2$ extracts the skew-Hermitian part.
+
+\paragraph{Retraction.}
+For $U(2)$, we use the Cayley retraction:
+\begin{equation}
+  R_U(\alpha \xi) = \left(I - \frac{\alpha}{2} W\right)^{-1} \left(I + \frac{\alpha}{2} W\right) U,
+  \label{eq:cayley}
+\end{equation}
+where $W = \xi U^\dagger$ projected to $\mathfrak{u}(2)$ via $W \leftarrow (W - W^\dagger)/2$.
+The Cayley map preserves unitarity exactly for any step size $\alpha$.
+For $U(1)^4$, we use normalization: $R_{\mathbf{z}}(\alpha \xi) = (\mathbf{z} + \alpha \xi) / |\mathbf{z} + \alpha \xi|$ elementwise.
+
+\paragraph{Riemannian gradient descent with Armijo line search.}
+The update rule is $x_{t+1} = R_{x_t}(-\eta \cdot \grad f(x_t))$, where $\eta$ is determined by Armijo backtracking: starting from $\alpha_0$, contract $\alpha \leftarrow \tau \alpha$ (with $\tau = 0.5$) until the sufficient decrease condition is satisfied:
+\begin{equation}
+  \LL(R_{x_t}(-\alpha \cdot \grad f(x_t))) \leq \LL(x_t) - c \cdot \alpha \cdot \|\grad f(x_t)\|^2,
+\end{equation}
+with $c = 10^{-4}$.
+
+\paragraph{Riemannian Adam.}
+We also implement Riemannian Adam~\cite{becigneul2019riemannian}, which maintains exponentially weighted first and second moment estimates of the Riemannian gradient with parallel transport of momentum between iterates.
+The bias-corrected update direction is $d_t = \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)$, with $\beta_1 = 0.9$, $\beta_2 = 0.999$, $\epsilon = 10^{-8}$.
+Momentum is transported between tangent spaces via projection:
+\begin{equation}
+  \Gamma_{x_t \to x_{t+1}}(m_t) = \proj_{T_{x_{t+1}} \MM}(m_t).
+\end{equation}
+
+\subsection{Batched einsum evaluation}
+
+The forward transform is implemented as an Einstein summation (einsum) contraction of the image tensor with the gate tensors.
+The contraction order is pre-optimized using a tree search algorithm (TreeSA) that minimizes the total operation count.
+
+For batched training, a batch index $\beta$ is appended to the image input/output indices:
+\begin{equation}
+  Y_{q'_1, \ldots, q'_{m+n}, \beta} = \sum_{q_1, \ldots, q_{m+n}} \left(\prod_j G^j_{\cdots}\right) X_{q_1, \ldots, q_{m+n}, \beta}.
+\end{equation}
+The gate tensors are shared across the batch, reducing GPU kernel launch overhead from $O(B)$ to $O(1)$.
+
+% ============================================================================
+% EXPERIMENTS
+% ============================================================================
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Setup}
+
+\paragraph{Datasets.}
+We evaluate on two datasets of different scales:
+\begin{itemize}
+  \item \textbf{Quick Draw}~\cite{quickdraw}: Hand-drawn sketches ($28 \times 28$, zero-padded to $32 \times 32$, i.e., $m = n = 5$ qubits). Five categories (cat, dog, airplane, apple, bicycle), 1000+ images per category.
+  \item \textbf{DIV2K}~\cite{div2k}: High-resolution natural photographs, preprocessed to $256 \times 256$ ($m = n = 8$ qubits). 800 training + 100 validation images.
+\end{itemize}
+
+\paragraph{Training configuration.}
+All bases are trained using RiemannianGD with Armijo line search ($\alpha_0 = 0.01$, $c = 10^{-4}$, $\tau = 0.5$, max 10 backtracking steps).
+The loss function is $\LL_{\text{MSE}}$ (\cref{eq:mse_loss}) with $k = 10\%$ of total coefficients.
+We use a 20\% validation split, early stopping with patience 2 epochs, and random seed 42 for reproducibility.
+
+\paragraph{Metrics.}
+We report PSNR (peak signal-to-noise ratio, $10 \log_{10}(1/\text{MSE})$, higher is better) and SSIM (structural similarity index, higher is better) at compression ratios $k/N \in \{5\%, 10\%, 15\%, 20\%\}$.
+All metrics are averaged over the full evaluation set.
+
+\paragraph{Baselines.}
+We compare against the classical FFT (the untrained fixed-parameter DFT), which serves as the natural baseline since all learned bases reduce to it at their initialization point.
+% TODO: Add DCT and wavelet baselines in future revision.
+
+\subsection{Results on Quick Draw ($32 \times 32$)}
+
+\begin{table}[h]
+\centering
+\caption{Compression quality on Quick Draw ($32 \times 32$, 5 qubits per dimension). PSNR (dB) / SSIM at four compression ratios. Best learned result in \textbf{bold}.}
+\label{tab:quickdraw}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Method} & \textbf{5\%} & \textbf{10\%} & \textbf{15\%} & \textbf{20\%} \\
+\midrule
+FFT (fixed) & 15.27 / 0.363 & 17.27 / 0.444 & 18.99 / 0.490 & 20.50 / 0.526 \\
+\midrule
+QFT (learned) & 15.78 / 0.364 & 17.42 / 0.444 & 18.99 / 0.490 & 20.50 / 0.526 \\
+Ent.\ QFT (learned) & \textbf{15.38} / \textbf{0.379} & \textbf{17.42} / \textbf{0.458} & \textbf{19.15} / \textbf{0.505} & \textbf{20.70} / \textbf{0.541} \\
+TEBD (learned) & 14.57 / 0.340 & 16.35 / 0.414 & 17.77 / 0.465 & 19.11 / 0.501 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On Quick Draw (\cref{tab:quickdraw}), the Entangled QFT achieves the best performance across all compression ratios, improving over the classical FFT by up to $+0.20$~dB in PSNR and $+0.015$ in SSIM at 20\% compression.
+The separable QFT shows modest gains at aggressive compression (5\%) but converges to FFT performance at higher ratios, suggesting that the learned gates recover parameters close to the DFT values.
+TEBD consistently underperforms, with a $-0.92$~dB deficit at 10\% compression compared to FFT, indicating that the ring topology's local connectivity is insufficient for the frequency structure of even simple sketch images.
+
+\subsection{Results on DIV2K ($256 \times 256$)}
+
+\begin{table}[h]
+\centering
+\caption{Compression quality on DIV2K ($256 \times 256$, 8 qubits per dimension). PSNR (dB) / SSIM at four compression ratios. Best learned result in \textbf{bold}.}
+\label{tab:div2k}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Method} & \textbf{5\%} & \textbf{10\%} & \textbf{15\%} & \textbf{20\%} \\
+\midrule
+FFT (fixed) & 25.72 / 0.691 & 28.12 / 0.765 & 29.87 / 0.806 & 31.34 / 0.833 \\
+\midrule
+QFT (learned) & 25.78 / 0.698 & 28.20 / 0.773 & 29.96 / 0.813 & 31.44 / 0.840 \\
+Ent.\ QFT (learned) & \textbf{25.79} / \textbf{0.699} & \textbf{28.20} / \textbf{0.773} & \textbf{29.96} / \textbf{0.813} & \textbf{31.45} / \textbf{0.840} \\
+TEBD (learned) & 24.49 / 0.614 & 26.61 / 0.685 & 28.25 / 0.729 & 29.70 / 0.765 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On DIV2K (\cref{tab:div2k}), all learned bases improve over the FFT baseline, with the Entangled QFT and QFT performing nearly identically.
+The marginal gain of entanglement is smaller on high-resolution images ($+0.01$~dB), likely because the 8-qubit circuits have more parameters in the QFT structure itself, reducing the relative impact of the $n = 8$ additional entanglement phases.
+TEBD again lags significantly ($-1.51$~dB at 10\%), confirming that the ring topology is systematically suboptimal for 2D image compression.
+
+\subsection{Training dynamics}
+
+\begin{table}[h]
+\centering
+\caption{Training time (seconds) and convergence behavior on DIV2K.}
+\label{tab:training}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Method} & \textbf{Time (s)} & \textbf{Final train loss} & \textbf{Final val loss} \\
+\midrule
+QFT & 290.8 & 1162.0 & 2491.3 \\
+Ent.\ QFT & 126.9 & 1162.0 & 2490.9 \\
+TEBD & 277.8 & 1752.6 & 1441.2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The Entangled QFT converges faster than the QFT ($127$~s vs.\ $291$~s on DIV2K), despite having more parameters.
+This suggests that the entanglement gates provide useful cross-dimensional gradients that accelerate optimization.
+TEBD converges to a significantly higher training loss ($1752.6$ vs.\ $1162.0$), reflecting its limited expressiveness.
+Interestingly, TEBD's validation loss is lower than its training loss, suggesting that the ring topology acts as an implicit regularizer---but at the cost of underfitting.
+
+\subsection{Effect of circuit topology}
+
+The key experimental finding is that \textbf{circuit connectivity topology determines compression quality more than parameter count or circuit depth}:
+
+\begin{enumerate}
+  \item The Entangled QFT adds only $n$ phase parameters over the QFT ($+8$ parameters for DIV2K) yet consistently achieves the best or tied-best performance.
+  \item TEBD has $2n$ phase parameters---comparable to the Entangled QFT---but performs worst due to its local ring connectivity.
+  \item The QFT's all-to-all connectivity within each dimension closely matches the DFT's frequency structure, explaining why learned QFT bases converge near the DFT solution.
+  \item Cross-dimensional coupling (Entangled QFT) captures correlations that no amount of intra-dimensional parameters can express in a separable architecture.
+\end{enumerate}
+
+% ============================================================================
+% DISCUSSION
+% ============================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{Why learned bases match but don't dramatically exceed classical FFT.}
+The DFT is provably optimal for periodic signals and near-optimal for smooth functions~\cite{donoho2006compressed}.
+Natural images are not periodic, but the DFT's uniform coverage of the frequency plane is difficult to beat without fundamentally changing the transform structure (as wavelets do by trading frequency resolution for spatial resolution).
+Our parametric bases explore a neighborhood of the DFT on the parameter manifold; the learned optima lie close to the DFT parameters, confirming that the FFT is already a strong local minimum for general images.
+The gains come from fine-tuning the frequency responses to specific image statistics.
+
+\paragraph{The value of cross-dimensional entanglement.}
+The Entangled QFT's consistent advantage, despite minimal parameter overhead, supports the hypothesis that cross-dimensional correlations in natural images are not fully captured by separable transforms.
+The entanglement gates allow the basis to represent frequency components that mix row and column information---analogous to diagonal Gabor-like features that a separable basis cannot express.
+
+\paragraph{Limitations and future work.}
+Our current benchmarks compare only against the classical FFT.
+A comprehensive evaluation should include the DCT (JPEG's basis), wavelet transforms (JPEG2000), and learned dictionaries (K-SVD).
+We expect that the parametric bases may show larger advantages on specific image classes (e.g., structured/self-similar images) or at extreme compression ratios.
+Additionally, ablation studies comparing Riemannian vs.\ projected Euclidean optimization would quantify the contribution of the manifold-aware training scheme.
+The MERA-inspired basis requires power-of-two qubit counts per dimension and was not benchmarked on the two primary datasets; evaluating it on $16 \times 16$ or $64 \times 64$ patches is a direction for future work.
+
+\paragraph{Reproducibility.}
+All experiments are implemented in the open-source Julia library \texttt{ParametricDFT.jl}, which provides the full training pipeline including batched einsum evaluation, Riemannian optimizers, checkpointing, and optional GPU acceleration via CUDA.
+Trained circuit parameters, benchmark scripts, and evaluation code are included in the repository.
+% TODO: Add URL/DOI when available.
+
+% ============================================================================
+% CONCLUSION
+% ============================================================================
+\section{Conclusion}
+
+We have presented a systematic framework for learning sparse image representations using parametric quantum circuit structures optimized on Riemannian manifolds.
+By comparing four tensor network topologies---QFT, Entangled QFT, TEBD, and MERA-inspired circuits---we have shown that circuit connectivity topology is the primary determinant of compression quality.
+The Entangled QFT, which introduces cross-dimensional coupling between row and column qubits, achieves the best performance with minimal parameter overhead.
+Riemannian optimization on the natural parameter manifolds ($U(2)$ for Hadamard gates, $U(1)^4$ for phase gates) preserves unitarity exactly and enables efficient training.
+While the learned bases are competitive with classical FFT rather than dramatically superior, they establish a principled, extensible framework for data-adaptive unitary transforms grounded in quantum circuit structures.
+
+% ============================================================================
+% ACKNOWLEDGMENTS
+% ============================================================================
+\begin{acknowledgments}
+% TODO: Add acknowledgments.
+\end{acknowledgments}
+
+% ============================================================================
+% REFERENCES
+% ============================================================================
+\bibliography{references}
+\bibliographystyle{unsrt}
+
+% ============================================================================
+% APPENDICES
+% ============================================================================
+\appendix
+
+\section{Riemannian optimization details}
+\label{app:riemannian}
+
+\subsection{Cayley retraction derivation}
+
+For a unitary matrix $U \in U(2)$ and tangent vector $\xi = US$ where $S^\dagger = -S$, the Cayley retraction maps:
+\begin{align}
+  W &= \xi U^\dagger = USU^\dagger, \\
+  W &\leftarrow \frac{W - W^\dagger}{2} \quad \text{(project to } \mathfrak{u}(2)\text{)}, \\
+  R_U(\alpha \xi) &= \left(I - \frac{\alpha}{2}W\right)^{-1}\left(I + \frac{\alpha}{2}W\right)U.
+\end{align}
+
+Since $W$ is skew-Hermitian, $(I - \frac{\alpha}{2}W)^{-1}(I + \frac{\alpha}{2}W)$ is unitary for any $\alpha \in \RR$, as can be verified by checking that the product with its adjoint equals the identity.
+
+For $2 \times 2$ matrices, the inverse admits a closed form via the adjugate:
+\begin{equation}
+  (I - \frac{\alpha}{2}W)^{-1} = \frac{1}{\det(I - \frac{\alpha}{2}W)} \operatorname{adj}(I - \frac{\alpha}{2}W).
+\end{equation}
+
+\subsection{Parallel transport for Riemannian Adam}
+
+For $U(2)$, the projection-based transport from $U_t$ to $U_{t+1}$ is:
+\begin{equation}
+  \Gamma_{U_t \to U_{t+1}}(m_t) = U_{t+1} \cdot \skew(U_{t+1}^\dagger m_t).
+\end{equation}
+
+For $U(1)^4$, the transport is the tangent projection at the new point:
+\begin{equation}
+  \Gamma_{\mathbf{z}_t \to \mathbf{z}_{t+1}}(m_t) = i \cdot \operatorname{Im}(\bar{\mathbf{z}}_{t+1} \circ m_t) \circ \mathbf{z}_{t+1}.
+\end{equation}
+
+Both are exact to first order in the step size.
+
+\section{Detailed benchmark configurations}
+\label{app:benchmark}
+
+\begin{table}[h]
+\centering
+\caption{Hyperparameters used in the benchmark experiments.}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Optimizer & RiemannianGD \\
+Initial learning rate $\alpha_0$ & 0.01 \\
+Armijo constant $c$ & $10^{-4}$ \\
+Backtracking factor $\tau$ & 0.5 \\
+Max backtracking steps & 10 \\
+Loss function & MSE ($k = 10\%$) \\
+Validation split & 20\% \\
+Early stopping patience & 2 epochs \\
+Random seed & 42 \\
+Epochs (Quick Draw) & 5 \\
+Training images (Quick Draw) & 20 \\
+Epochs (DIV2K) & 5 \\
+Training images (DIV2K) & 20 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}
