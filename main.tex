@@ -48,12 +48,13 @@
 % ABSTRACT
 % ============================================================================
 \begin{abstract}
-We present a unified framework for learning data-adaptive unitary transforms by relaxing the gate parameters of quantum circuit tensor networks and optimizing them on Riemannian manifolds.
-The Hadamard gates are optimized on the unitary group $U(2)$ via Cayley retraction, while controlled-phase gates are optimized on the product of unit circles $U(1)^4$, preserving unitarity exactly at every iterate.
-We systematically compare four circuit topologies---separable Quantum Fourier Transform (QFT), an Entangled QFT with cross-dimensional coupling, Time-Evolving Block Decimation (TEBD) with ring connectivity, and a MERA-inspired hierarchical circuit---on image compression benchmarks including Quick Draw ($32 \times 32$) and DIV2K ($256 \times 256$).
-The Entangled QFT, which introduces $n$ additional phase gates coupling row and column qubits, achieves the best compression quality across all settings, while TEBD with local ring connectivity underperforms the fixed classical FFT by up to $1.5$~dB despite having comparable parameter count.
-The results indicate that circuit connectivity topology is a more important design variable than parameter count or circuit depth for learned transform bases.
-The approach brings together concepts from tensor networks, Riemannian optimization, quantum circuit simulation, and differentiable programming, and is implemented in an open-source Julia library with GPU acceleration.
+Compressed sensing relies on finding sparse representations of signals in a suitable transform basis.
+Classical bases such as the Fourier and cosine transforms are fixed and signal-agnostic, leaving data-dependent structure unexploited.
+We present a framework for learning data-adaptive unitary transforms by parameterizing the transform as a tensor network of quantum circuit gates and optimizing on the Riemannian manifold of unitary matrices.
+The tensor network structure---inherited from the Cooley--Tukey decomposition of the FFT---provides an efficient $O(N \log N)$ transform while exposing a natural parameter manifold on which gradient-based optimization preserves unitarity exactly.
+By varying the circuit connectivity, we construct a family of parametric bases with different inductive biases and systematically evaluate their compression quality.
+We find that circuit topology is a more important design variable than parameter count: cross-dimensional entanglement gates that couple spatial dimensions yield the best performance, while topologies with only local connectivity underperform even the fixed FFT.
+The approach combines tensor network contraction, Riemannian optimization, and differentiable programming, and is implemented as an open-source Julia library.
 \end{abstract}
 
 % ============================================================================
