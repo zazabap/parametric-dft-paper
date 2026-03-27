@@ -1,0 +1,6 @@
+[submodule "ParametricDFT.jl"]
+	path = ParametricDFT.jl
+	url = https://github.com/nzy1997/ParametricDFT.jl.git
+[submodule "ParametricDFT-Benchmarks.jl"]
+	path = ParametricDFT-Benchmarks.jl
+	url = https://github.com/zazabap/ParametricDFT-Benchmarks.jl.git
