@@ -9,10 +9,10 @@
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 \usepackage{tikz}
-% \usetikzlibrary{quantikz2}  % TODO: enable when adding circuit diagrams
 \usepackage{braket}
 \usepackage{multirow}
 \usepackage{xcolor}
+\graphicspath{{figures/diagrams/}{figures/benchmarks/}}
 
 % Theorem environments
 \newtheorem{definition}{Definition}
@@ -134,6 +134,13 @@ Recursive application yields $k$ Hadamard gates and $k(k-1)/2$ controlled-phase 
 
 For 2D images of size $2^m \times 2^n$, the separable 2D DFT is $F_m \otimes F_n$, requiring $m + n$ Hadamard gates and $m(m-1)/2 + n(n-1)/2$ controlled-phase gates applied independently to the row and column qubit registers.
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.9\columnwidth]{fft_tensor_network.pdf}
+\caption{Complete tensor network decomposition of the 4-qubit FFT. The input tensor $\mathbf{x}$ is decomposed through Hadamard gates $H$ and controlled-phase gates $M_k$, yielding the butterfly structure of the Cooley--Tukey algorithm.}
+\label{fig:fft_tn}
+\end{figure}
+
 % ============================================================================
 % CIRCUIT TOPOLOGIES
 % ============================================================================
@@ -179,6 +186,13 @@ This extension has several properties:
   \item Setting $\phi_k = 0$ for all $k$ recovers the separable QFT.
 \end{enumerate}
 
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.85\textwidth]{entangled_qft_circuit.pdf}
+\caption{Entangled QFT circuit for $n=4$ qubits per dimension. Row qubits $x_k$ and column qubits $y_k$ each pass through independent QFT circuits (Hadamard gates $H$ and controlled-phase gates $M_j$). Entanglement gates $E_k$ couple corresponding row--column pairs, introducing cross-dimensional correlations.}
+\label{fig:entangled_qft}
+\end{figure*}
+
 \subsection{TEBD basis}
 \label{sec:tebd}
 
@@ -194,6 +208,13 @@ The parameter manifold is:
   \MM_{\text{TEBD}} = \prod_{k=1}^{2n} U(1)^4.
 \end{equation}
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.9\columnwidth]{tebd_circuit.pdf}
+\caption{TEBD circuit for $n=4$ row and column qubits with ring topology. Hadamard gates $H$ precede nearest-neighbor controlled-phase gates $T_{xk}$ (row ring) and $T_{yk}$ (column ring). Wrap-around gates close each ring.}
+\label{fig:tebd}
+\end{figure}
+
 \subsection{MERA-inspired basis}
 \label{sec:mera}
 
@@ -206,6 +227,13 @@ Both gate types use the same parameterization: $\diag(1, 1, 1, e^{i\phi})$ with 
 
 The total gate count per dimension is $2(n-1)$, and the circuit depth is $O(\log n)$.
 The hierarchical connectivity captures multi-scale features: layer~1 acts on nearest neighbors (fine scale), while deeper layers connect distant qubits (coarse scale).
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.85\textwidth]{mera_circuit.pdf}
+\caption{MERA-inspired circuit for $n=8$ row and column qubits. Disentanglers $D$ and isometries $W$ follow hierarchical connectivity: layer~1 (stride~1) connects nearest neighbors, layer~2 (stride~2) at distance~2, layer~3 (stride~4) connects distant qubits.}
+\label{fig:mera}
+\end{figure*}
 
 \subsection{Summary of circuit properties}
 
@@ -345,15 +373,17 @@ The gate tensors are shared across the batch, reducing GPU kernel launch overhea
 \subsection{Setup}
 
 \paragraph{Datasets.}
-We evaluate on two datasets of different scales:
+We evaluate on three datasets of increasing scale:
 \begin{itemize}
   \item \textbf{Quick Draw}~\cite{quickdraw}: Hand-drawn sketches ($28 \times 28$, zero-padded to $32 \times 32$, i.e., $m = n = 5$ qubits). Five categories (cat, dog, airplane, apple, bicycle), 1000+ images per category.
   \item \textbf{DIV2K}~\cite{div2k}: High-resolution natural photographs, preprocessed to $256 \times 256$ ($m = n = 8$ qubits). 800 training + 100 validation images.
+  \item \textbf{CLIC}: Professional photographs from the CLIC challenge, preprocessed to $512 \times 512$ ($m = n = 9$ qubits). This dataset tests scalability to higher resolutions with rich texture and detail.
 \end{itemize}
 
 \paragraph{Training configuration.}
 All bases are trained using RiemannianGD with Armijo line search ($\alpha_0 = 0.01$, $c = 10^{-4}$, $\tau = 0.5$, max 10 backtracking steps).
-The loss function is $\LL_{\text{MSE}}$ (\cref{eq:mse_loss}) with $k = 10\%$ of total coefficients.
+The primary loss function is $\LL_{\text{MSE}}$ (\cref{eq:mse_loss}) with $k = 10\%$ of total coefficients.
+We additionally train all bases with the $L_1$ norm loss to evaluate the effect of sparsity-promoting objectives.
 We use a 20\% validation split, early stopping with patience 2 epochs, and random seed 42 for reproducibility.
 
 \paragraph{Metrics.}
@@ -361,75 +391,137 @@ We report PSNR (peak signal-to-noise ratio, $10 \log_{10}(1/\text{MSE})$, higher
 All metrics are averaged over the full evaluation set.
 
 \paragraph{Baselines.}
-We compare against the classical FFT (the untrained fixed-parameter DFT), which serves as the natural baseline since all learned bases reduce to it at their initialization point.
-% TODO: Add DCT and wavelet baselines in future revision.
+We compare against the classical FFT (the untrained fixed-parameter DFT) and the DCT (Discrete Cosine Transform), which serve as natural baselines since the FFT is the initialization point for all learned bases and the DCT is the standard transform used in JPEG compression.
 
-\subsection{Results on Quick Draw ($32 \times 32$)}
+\subsection{MSE Loss Results}
 
 \begin{table}[h]
 \centering
-\caption{Compression quality on Quick Draw ($32 \times 32$, 5 qubits per dimension). PSNR (dB) / SSIM at four compression ratios. Best learned result in \textbf{bold}.}
-\label{tab:quickdraw}
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-\textbf{Method} & \textbf{5\%} & \textbf{10\%} & \textbf{15\%} & \textbf{20\%} \\
-\midrule
-FFT (fixed) & 15.27 / 0.363 & 17.27 / 0.444 & 18.99 / 0.490 & 20.50 / 0.526 \\
-\midrule
-QFT (learned) & 15.78 / 0.364 & 17.42 / 0.444 & 18.99 / 0.490 & 20.50 / 0.526 \\
-Ent.\ QFT (learned) & \textbf{15.38} / \textbf{0.379} & \textbf{17.42} / \textbf{0.458} & \textbf{19.15} / \textbf{0.505} & \textbf{20.70} / \textbf{0.541} \\
-TEBD (learned) & 14.57 / 0.340 & 16.35 / 0.414 & 17.77 / 0.465 & 19.11 / 0.501 \\
-\bottomrule
-\end{tabular}
+\caption{Compression quality on Quick Draw ($32 \times 32$, MSE loss). PSNR (dB) / SSIM at four compression ratios. Best learned result in \textbf{bold}.}
+\label{tab:quickdraw_mse}
+\input{tables/quickdraw_mse}
 \end{table}
 
-On Quick Draw (\cref{tab:quickdraw}), the Entangled QFT achieves the best performance across all compression ratios, improving over the classical FFT by $+0.20$~dB PSNR and $+0.015$ SSIM at 20\% compression.
+\begin{table}[h]
+\centering
+\caption{Compression quality on DIV2K ($256 \times 256$, MSE loss). PSNR (dB) / SSIM.}
+\label{tab:div2k_mse}
+\input{tables/div2k_mse}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Compression quality on CLIC ($512 \times 512$, MSE loss). PSNR (dB) / SSIM.}
+\label{tab:clic_mse}
+\input{tables/clic_mse}
+\end{table}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.32\textwidth]{mse/quickdraw_reconstruction_grid.png}
+\includegraphics[width=0.32\textwidth]{mse/div2k_reconstruction_grid.png}
+\includegraphics[width=0.32\textwidth]{mse/clic_reconstruction_grid.png}
+\caption{Reconstruction quality comparison across datasets (MSE loss). Each grid shows the original image and reconstructions at 5\%, 10\%, 15\%, and 20\% coefficient retention for each basis type.}
+\label{fig:recon_mse}
+\end{figure*}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\columnwidth]{mse/cross_dataset_psnr.png}
+\includegraphics[width=0.48\columnwidth]{mse/cross_dataset_ssim.png}
+\caption{Cross-dataset comparison of PSNR and SSIM at 10\% coefficient retention (MSE loss).}
+\label{fig:cross_mse}
+\end{figure}
+
+Across all three datasets (\cref{tab:quickdraw_mse,tab:div2k_mse,tab:clic_mse}), the Entangled QFT achieves the best or tied-best performance among learned bases at every compression ratio.
+On Quick Draw, the Entangled QFT improves over the classical FFT by up to $+0.20$~dB PSNR and $+0.015$ SSIM at 20\% compression.
 The separable QFT shows modest gains at aggressive compression (5\%) but converges to FFT performance at higher ratios, suggesting that the learned parameters remain close to the DFT values.
-TEBD consistently underperforms the fixed FFT baseline by $0.92$~dB at 10\% compression, indicating that the ring topology's nearest-neighbor connectivity is insufficient for the frequency structure of even simple sketch images.
+TEBD consistently underperforms the fixed FFT baseline, indicating that the ring topology's nearest-neighbor connectivity is insufficient for the frequency structure of images.
 
-\subsection{Results on DIV2K ($256 \times 256$)}
+On DIV2K and CLIC, the QFT-family bases improve over the FFT baseline, with the Entangled QFT and separable QFT performing comparably.
+The gain from entanglement is smaller on high-resolution images, likely because the 8- and 9-qubit QFT structures already provide sufficient all-to-all connectivity within each dimension.
+TEBD's deficit grows with image complexity, consistent with the expectation that the ring topology's locality becomes more limiting as resolution increases.
 
-\begin{table}[h]
-\centering
-\caption{Compression quality on DIV2K ($256 \times 256$, 8 qubits per dimension). PSNR (dB) / SSIM at four compression ratios. Best learned result in \textbf{bold}.}
-\label{tab:div2k}
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-\textbf{Method} & \textbf{5\%} & \textbf{10\%} & \textbf{15\%} & \textbf{20\%} \\
-\midrule
-FFT (fixed) & 27.43 / 0.728 & 29.76 / 0.805 & 31.48 / 0.850 & 32.92 / 0.880 \\
-\midrule
-QFT (learned) & 25.78 / 0.698 & 28.20 / 0.773 & 29.96 / 0.813 & 31.44 / 0.840 \\
-Ent.\ QFT (learned) & \textbf{25.79} / \textbf{0.699} & \textbf{28.20} / \textbf{0.773} & \textbf{29.96} / \textbf{0.813} & \textbf{31.45} / \textbf{0.840} \\
-TEBD (learned) & 24.49 / 0.614 & 26.61 / 0.685 & 28.25 / 0.729 & 29.70 / 0.765 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\subsection{L1 Norm Results}
 
-On DIV2K (\cref{tab:div2k}), all QFT-family bases improve over the FFT baseline, with the Entangled QFT and separable QFT performing comparably.
-The gain from entanglement is smaller on high-resolution images ($+0.01$~dB), likely because the 8-qubit QFT structure already provides sufficient all-to-all connectivity within each dimension.
-TEBD's deficit grows from $0.92$~dB on $32 \times 32$ to $1.51$~dB on $256 \times 256$, consistent with the expectation that the ring topology's locality becomes more limiting as image complexity increases.
-
-\subsection{Training dynamics}
+To compare the effect of loss function choice, we also train all bases using the L1 norm loss, which promotes sparsity via compressed sensing theory.
 
 \begin{table}[h]
 \centering
-\caption{Training time (seconds) and convergence behavior on DIV2K.}
-\label{tab:training}
-\begin{tabular}{@{}lccc@{}}
-\toprule
-\textbf{Method} & \textbf{Time (s)} & \textbf{Final train loss} & \textbf{Final val loss} \\
-\midrule
-QFT & 290.8 & 1162.0 & 2491.3 \\
-Ent.\ QFT & 126.9 & 1162.0 & 2490.9 \\
-TEBD & 277.8 & 1752.6 & 1441.2 \\
-\bottomrule
-\end{tabular}
+\caption{Compression quality on Quick Draw ($32 \times 32$, L1 norm loss). PSNR (dB) / SSIM.}
+\label{tab:quickdraw_l1}
+\input{tables/l1norm_quickdraw}
 \end{table}
 
-The Entangled QFT converges faster than the separable QFT ($127$~s vs.\ $291$~s on DIV2K), despite having more parameters.
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.32\textwidth]{l1norm/quickdraw_reconstruction_grid.png}
+\includegraphics[width=0.32\textwidth]{l1norm/div2k_reconstruction_grid.png}
+\includegraphics[width=0.32\textwidth]{l1norm/clic_reconstruction_grid.png}
+\caption{Reconstruction quality comparison (L1 norm loss).}
+\label{fig:recon_l1}
+\end{figure*}
+
+The L1 norm loss promotes coefficient sparsity more aggressively than the MSE reconstruction loss.
+However, because the L1 objective does not directly optimize reconstruction quality after truncation, the MSE-trained bases generally achieve higher PSNR and SSIM at the same compression ratio.
+The relative ranking of circuit topologies is preserved under both loss functions: the Entangled QFT remains the strongest learned basis, and TEBD remains the weakest, confirming that the topology effect is robust to the choice of training objective.
+
+\subsection{Topology Comparison (8-qubit, $256 \times 256$)}
+
+To compare all four topologies including MERA (which requires power-of-two qubit counts), we evaluate on DIV2K at $256 \times 256$ resolution ($m = n = 8$ qubits).
+
+\begin{table}[h]
+\centering
+\caption{Topology comparison on DIV2K ($256 \times 256$, 8 qubits). All four circuit topologies including MERA.}
+\label{tab:topology}
+\input{tables/div2k_8q}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.9\columnwidth]{topology/div2k_8q_reconstruction_grid.png}
+\caption{Reconstruction grid for all four topologies on DIV2K ($256 \times 256$, 8 qubits).}
+\label{fig:recon_topology}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.9\columnwidth]{topology/div2k_8q_training_curves.png}
+\caption{Training convergence for all four topologies on DIV2K (8 qubits).}
+\label{fig:training_topology}
+\end{figure}
+
+The MERA-inspired basis, with its hierarchical multi-scale connectivity and $O(\log n)$ circuit depth, captures features at multiple spatial scales.
+Its performance falls between the QFT-family bases and TEBD, consistent with the observation that hierarchical connectivity is more expressive than ring connectivity but less so than the all-to-all connectivity of the QFT variants.
+
+\subsection{Training Dynamics}
+
+\begin{table}[h]
+\centering
+\caption{Training time (seconds) across datasets (MSE loss).}
+\label{tab:timing}
+\input{tables/timing}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\columnwidth]{mse/quickdraw_training_curves.png}
+\includegraphics[width=0.48\columnwidth]{mse/div2k_training_curves.png}
+\caption{Training convergence curves (MSE loss). Validation loss vs.\ epoch on log scale.}
+\label{fig:training_curves}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\columnwidth]{mse/quickdraw_step_losses.png}
+\includegraphics[width=0.48\columnwidth]{mse/div2k_step_losses.png}
+\caption{Per-step training loss (MSE loss).}
+\label{fig:step_losses}
+\end{figure}
+
+The Entangled QFT converges faster than the separable QFT despite having more parameters.
 We attribute this to the cross-dimensional gradient pathways created by the entanglement gates, which provide additional directions for the optimizer to explore.
-TEBD converges to a training loss approximately 50\% higher than the QFT variants ($1752.6$ vs.\ $1162.0$).
+TEBD converges to a higher training loss than the QFT variants.
 Notably, TEBD's validation loss is lower than its training loss, suggesting that the ring topology acts as an implicit regularizer at the cost of underfitting.
 
 \subsection{Effect of circuit topology}
@@ -439,6 +531,7 @@ The key experimental finding is that \textbf{circuit connectivity topology deter
 \begin{enumerate}
   \item The Entangled QFT adds only $n$ phase parameters over the QFT ($+8$ parameters for DIV2K) yet consistently achieves the best or tied-best performance.
   \item TEBD has $2n$ phase parameters---comparable to the Entangled QFT---but performs worst due to its local ring connectivity.
+  \item The MERA-inspired basis, with hierarchical connectivity, performs between QFT and TEBD, demonstrating that multi-scale structure is beneficial but insufficient without cross-dimensional coupling.
   \item The QFT's all-to-all connectivity within each dimension closely matches the DFT's frequency structure, explaining why learned QFT bases converge near the DFT solution.
   \item Cross-dimensional coupling (Entangled QFT) captures correlations that no amount of intra-dimensional parameters can express in a separable architecture.
 \end{enumerate}
@@ -452,17 +545,22 @@ The key experimental finding is that \textbf{circuit connectivity topology deter
 The learned bases improve upon the classical FFT but do not dramatically exceed it.
 This is consistent with the DFT being near-optimal within the separable transform family for generic images~\cite{donoho2006compressed}: the separable QFT's learned parameters converge close to DFT values, confirming that the FFT occupies a strong local minimum on the parameter manifold.
 The Entangled QFT improves upon this by expanding the search space with cross-dimensional connections that the separable manifold cannot reach.
+Results on CLIC ($512 \times 512$) confirm that these findings scale to higher resolutions.
 
 The comparison between the Entangled QFT and TEBD is instructive for quantum circuit design.
 The Entangled QFT's $n$ cross-dimensional phases outperform TEBD's $2n$ ring-topology phases because they connect degrees of freedom that are relevant to the 2D structure of images.
 The entanglement gates enable the basis to represent frequency components that mix row and column information, which no separable architecture can express regardless of parameter count.
+The MERA-inspired basis, with its hierarchical multi-scale connectivity, performs between the QFT variants and TEBD (\cref{tab:topology}), confirming that multi-scale structure is beneficial but insufficient without cross-dimensional coupling.
 This observation suggests that for variational quantum circuits, the connectivity pattern should be guided by the structure of the target problem rather than chosen for computational convenience.
+
+The comparison of MSE and L1 training objectives reveals that the relative ranking of circuit topologies is robust to the choice of loss function (\cref{tab:quickdraw_l1}).
+While the L1 norm promotes sparsity more aggressively, the MSE reconstruction loss yields better compression metrics because it directly optimizes the end-to-end reconstruction pipeline including truncation.
 
 While our circuits are evaluated classically as tensor networks, the parametric QFT structure maps directly to quantum hardware: implementing the Entangled QFT requires only $n$ additional CPHASE gates beyond the standard QFT circuit.
 The tensor network contraction framework used in this work shares the same computational structure as quantum circuit simulation~\cite{luo2020yao, markov2008simulating}, and can exploit the same software and hardware advances, including GPU acceleration and optimized contraction orders.
 
-Our current benchmarks compare against the classical FFT; comparisons with the DCT, wavelets, and learned dictionaries would provide a more complete picture.
-Ablation studies isolating the contribution of Riemannian vs.\ projected Euclidean optimization, and evaluation of the MERA-inspired basis on power-of-two image patches, are natural next steps.
+The inclusion of the DCT as a baseline provides context for the learned bases: the DCT's real-valued cosine basis is well-suited for natural images, and comparisons against it quantify the practical advantage of learned unitary transforms.
+Ablation studies isolating the contribution of Riemannian vs.\ projected Euclidean optimization, and comparison with wavelets and learned dictionaries, are natural next steps.
 A Julia implementation of the framework is available as an open-source library.
 % TODO: Add URL/DOI when available.
 
@@ -544,14 +642,22 @@ Initial learning rate $\alpha_0$ & 0.01 \\
 Armijo constant $c$ & $10^{-4}$ \\
 Backtracking factor $\tau$ & 0.5 \\
 Max backtracking steps & 10 \\
-Loss function & MSE ($k = 10\%$) \\
+Loss functions & MSE ($k = 10\%$), L1 norm \\
 Validation split & 20\% \\
 Early stopping patience & 2 epochs \\
 Random seed & 42 \\
-Epochs (Quick Draw) & 5 \\
-Training images (Quick Draw) & 20 \\
-Epochs (DIV2K) & 5 \\
-Training images (DIV2K) & 20 \\
+\midrule
+\multicolumn{2}{@{}l}{\textbf{Quick Draw} ($32 \times 32$, $m = n = 5$ qubits)} \\
+Epochs & 5 \\
+Training images & 20 \\
+\midrule
+\multicolumn{2}{@{}l}{\textbf{DIV2K} ($256 \times 256$, $m = n = 8$ qubits)} \\
+Epochs & 5 \\
+Training images & 20 \\
+\midrule
+\multicolumn{2}{@{}l}{\textbf{CLIC} ($512 \times 512$, $m = n = 9$ qubits)} \\
+Epochs & 5 \\
+Training images & 20 \\
 \bottomrule
 \end{tabular}
 \end{table}
