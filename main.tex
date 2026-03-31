@@ -399,21 +399,21 @@ We compare against the classical FFT (the untrained fixed-parameter DFT) and the
 \centering
 \caption{Compression quality on Quick Draw ($32 \times 32$, MSE loss). PSNR (dB) / SSIM at four compression ratios. Best learned result in \textbf{bold}.}
 \label{tab:quickdraw_mse}
-\input{tables/quickdraw_mse}
+\resizebox{\columnwidth}{!}{\input{tables/quickdraw_mse}}
 \end{table}
 
 \begin{table}[h]
 \centering
 \caption{Compression quality on DIV2K ($256 \times 256$, MSE loss). PSNR (dB) / SSIM.}
 \label{tab:div2k_mse}
-\input{tables/div2k_mse}
+\resizebox{\columnwidth}{!}{\input{tables/div2k_mse}}
 \end{table}
 
 \begin{table}[h]
 \centering
 \caption{Compression quality on CLIC ($512 \times 512$, MSE loss). PSNR (dB) / SSIM.}
 \label{tab:clic_mse}
-\input{tables/clic_mse}
+\resizebox{\columnwidth}{!}{\input{tables/clic_mse}}
 \end{table}
 
 \begin{figure*}[t]
@@ -450,7 +450,7 @@ To compare the effect of loss function choice, we also train all bases using the
 \centering
 \caption{Compression quality on Quick Draw ($32 \times 32$, L1 norm loss). PSNR (dB) / SSIM.}
 \label{tab:quickdraw_l1}
-\input{tables/l1norm_quickdraw}
+\resizebox{\columnwidth}{!}{\input{tables/l1norm_quickdraw}}
 \end{table}
 
 \begin{figure*}[t]
@@ -474,7 +474,7 @@ To compare all four topologies including MERA (which requires power-of-two qubit
 \centering
 \caption{Topology comparison on DIV2K ($256 \times 256$, 8 qubits). All four circuit topologies including MERA.}
 \label{tab:topology}
-\input{tables/div2k_8q}
+\resizebox{\columnwidth}{!}{\input{tables/div2k_8q}}
 \end{table}
 
 \begin{figure}[t]
@@ -500,7 +500,7 @@ Its performance falls between the QFT-family bases and TEBD, consistent with the
 \centering
 \caption{Training time (seconds) across datasets (MSE loss).}
 \label{tab:timing}
-\input{tables/timing}
+\resizebox{\columnwidth}{!}{\input{tables/timing}}
 \end{table}
 
 \begin{figure}[t]
