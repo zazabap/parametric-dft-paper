@@ -388,13 +388,6 @@ This experiment ranks topologies within the full-image (block size $=$ 256) unit
 \resizebox{\columnwidth}{!}{\input{tables/div2k_8q}}
 \end{table}
 
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.85\textwidth]{topology/div2k_8q_reconstruction_grid.png}
-\caption{Reconstruction grid for all four topologies on DIV2K ($256 \times 256$, 8 qubits).}
-\label{fig:recon_topology}
-\end{figure*}
-
 Across all compression ratios the Entangled QFT achieves the best or tied-best PSNR/SSIM among learned bases, the separable QFT tracks close behind, and TEBD remains the weakest learned topology.
 The MERA-inspired basis, with hierarchical multi-scale connectivity and $O(\log n)$ circuit depth, falls between the QFT family and TEBD: hierarchical structure helps, but less than the cross-dimensional all-to-all coupling of the Entangled QFT.
 The ranking is stable: Entangled QFT $>$ QFT $>$ MERA $>$ TEBD $>$ FFT.
