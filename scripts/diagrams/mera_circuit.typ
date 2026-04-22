@@ -5,20 +5,24 @@
   import draw: *
   let height = gap-y * (n - 1) + 2 * padding-y
 
-  group(name: name, {
-    rect((rel: (- width/2, -height/2), to: pos), (rel: (width/2, height/2), to: pos), fill: white, name: "body")
-    if text != none{
-      content("body", text)
-    }
+  // Gate rectangles are drawn on layer 1 so they always sit on top of the
+  // wires, independent of the order in which gates and wires are issued.
+  on-layer(1, {
+    group(name: name, {
+      rect((rel: (- width/2, -height/2), to: pos), (rel: (width/2, height/2), to: pos), fill: white, name: "body")
+      if text != none{
+        content("body", text)
+      }
 
-    // Define custom anchors
-    for i in range(n){
-      let y = height/2 - padding-y - i * gap-y
-      anchor("i" + str(i), (rel: (-width/2, y), to: pos))
-      anchor("o" + str(i), (rel: (width/2, y), to: pos))
-    }
-    anchor("b", (rel: (0, -height/2), to: pos))
-    anchor("t", (rel: (0, height/2), to: pos))
+      // Define custom anchors
+      for i in range(n){
+        let y = height/2 - padding-y - i * gap-y
+        anchor("i" + str(i), (rel: (-width/2, y), to: pos))
+        anchor("o" + str(i), (rel: (width/2, y), to: pos))
+      }
+      anchor("b", (rel: (0, -height/2), to: pos))
+      anchor("t", (rel: (0, height/2), to: pos))
+    })
   })
 }
 
