@@ -222,33 +222,9 @@ This extension has several properties:
 \subsection{Alternative topologies: TEBD and MERA}
 \label{sec:alt_topologies}
 
-We include two alternative topologies as foils that stress-test the role of connectivity.
-Neither is the paper's winner; both serve as controls for the claim that \emph{cross-dimensional, all-to-all coupling} (the Entangled QFT) is the relevant structural ingredient.
-
-Time-Evolving Block Decimation~\cite{vidal2004tebd} uses a \emph{ring topology} of nearest-neighbor controlled-phase gates $T_k = \diag(1, 1, 1, e^{i\phi_k})$ preceded by Hadamard gates on each qubit, with wrap-around closing each register's ring independently.
-The row and column rings have $n$ phase gates each ($2n$ learnable phases total) and the circuit evaluates in $O(n)$ gate operations per dimension---the cheapest of the four topologies at inference.
-The parameter manifold is $\MM_{\text{TEBD}} = \prod_{k=1}^{2n} U(1)^4$.
-Its purpose in our comparison is to isolate connectivity from parameter count: TEBD has twice as many phase parameters as the Entangled QFT's extra entanglement gates but arranges them with strictly local connectivity.
-
-Multi-scale Entanglement Renormalization~\cite{vidal2007mera} uses hierarchical connectivity with disentanglers and isometries at increasing spatial scales.
-Our MERA-inspired basis borrows the connectivity pattern but parameterizes each gate as $\diag(1, 1, 1, e^{i\phi})$ for consistency with the other bases and to preserve invertibility.
-For $n = 2^k$ qubits, the circuit has $\log_2 n$ layers with stride $2^{l-1}$ in layer $l$, totalling $2(n-1)$ gates per dimension and $O(\log n)$ depth.
-The hierarchical connectivity captures multi-scale features: layer~1 mixes nearest neighbors, deeper layers mix distant qubits.
-MERA's purpose in our comparison is to test whether \emph{multi-scale} connectivity (a weaker form of all-to-all) suffices to match the Entangled QFT; we find in~\cref{sec:topology_div2k} that it does not.
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.9\columnwidth]{tebd_circuit.pdf}
-\caption{TEBD circuit for $n=4$ row and column qubits with ring topology. Hadamard gates $H$ precede nearest-neighbor controlled-phase gates $T_{xk}$ (row ring) and $T_{yk}$ (column ring). Wrap-around gates close each ring.}
-\label{fig:tebd}
-\end{figure}
-
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.85\textwidth]{mera_circuit.pdf}
-\caption{MERA-inspired circuit for $n=8$ row and column qubits. Disentanglers $D$ and isometries $W$ follow hierarchical connectivity: layer~1 (stride~1) connects nearest neighbors, layer~2 (stride~2) at distance~2, layer~3 (stride~4) connects distant qubits.}
-\label{fig:mera}
-\end{figure*}
+To stress-test the claim that cross-dimensional, all-to-all coupling is the decisive structural ingredient, we also implement two connectivity foils: a TEBD-style~\cite{vidal2004tebd} \emph{ring} (nearest-neighbor controlled-phase gates with wrap-around, $O(n)$ depth, $2n$ phase parameters total) and a MERA-inspired~\cite{vidal2007mera} \emph{hierarchical} circuit (disentanglers and isometries at increasing strides, $O(\log n)$ depth, $4(n-1)$ phase parameters).
+Both share the same $U(2)$ Hadamard layer as the QFT but replace its all-to-all phase chain with local or multi-scale connectivity.
+Their gate-level construction and circuit diagrams are deferred to~\cref{app:alt_topologies}; we use them here purely as controls in the topology comparison of~\cref{sec:topology_div2k}.
 
 \subsection{Summary of circuit properties}
 
@@ -759,5 +735,40 @@ Coverage & FFT / DCT baselines only \\
 \bottomrule
 \end{tabular}}
 \end{table}
+
+\FloatBarrier
+\section{Alternative circuit topologies: TEBD and MERA}
+\label{app:alt_topologies}
+
+This appendix gives the gate-level construction of the two connectivity foils summarized in~\cref{sec:alt_topologies}.
+
+\subsection{TEBD basis}
+
+Time-Evolving Block Decimation~\cite{vidal2004tebd} uses a \emph{ring topology} of nearest-neighbor controlled-phase gates $T_k = \diag(1, 1, 1, e^{i\phi_k})$ preceded by Hadamard gates on each qubit, with wrap-around closing each register's ring independently.
+The row and column rings have $n$ phase gates each ($2n$ learnable phases total) and the circuit evaluates in $O(n)$ gate operations per dimension, the cheapest of the four topologies at inference.
+The parameter manifold is $\MM_{\text{TEBD}} = \prod_{k=1}^{2n} U(1)^4$.
+TEBD's purpose in our comparison is to isolate connectivity from parameter count: it has twice as many phase parameters as the Entangled QFT's entanglement gates but arranges them with strictly local connectivity.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.9\columnwidth]{tebd_circuit.pdf}
+\caption{TEBD circuit for $n=4$ row and column qubits with ring topology. Hadamard gates $H$ precede nearest-neighbor controlled-phase gates $T_{xk}$ (row ring) and $T_{yk}$ (column ring). Wrap-around gates close each ring.}
+\label{fig:tebd}
+\end{figure}
+
+\subsection{MERA-inspired basis}
+
+Multi-scale Entanglement Renormalization~\cite{vidal2007mera} uses hierarchical connectivity with disentanglers and isometries at increasing spatial scales.
+Our MERA-inspired basis borrows the connectivity pattern but parameterizes each gate as $\diag(1, 1, 1, e^{i\phi})$ for consistency with the other bases and to preserve invertibility.
+For $n = 2^k$ qubits, the circuit has $\log_2 n$ layers with stride $2^{l-1}$ in layer $l$, totalling $2(n-1)$ gates per dimension and $O(\log n)$ depth.
+The hierarchical connectivity captures multi-scale features: layer~1 mixes nearest neighbors, deeper layers mix distant qubits.
+MERA's purpose in our comparison is to test whether \emph{multi-scale} connectivity (a weaker form of all-to-all) suffices to match the Entangled QFT; \cref{sec:topology_div2k} shows that it does not.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.85\textwidth]{mera_circuit.pdf}
+\caption{MERA-inspired circuit for $n=8$ row and column qubits. Disentanglers $D$ and isometries $W$ follow hierarchical connectivity: layer~1 (stride~1) connects nearest neighbors, layer~2 (stride~2) at distance~2, layer~3 (stride~4) connects distant qubits.}
+\label{fig:mera}
+\end{figure*}
 
 \end{document}
