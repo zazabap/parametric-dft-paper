@@ -4,7 +4,7 @@ BIBTEX = bibtex
 
 .PHONY: all paper diagrams tables benchmarks update clean
 
-all: diagrams tables benchmarks paper
+all: diagrams tables benchmarks training_plots paper
 
 paper: $(MAIN).pdf
 
@@ -19,6 +19,10 @@ diagrams:
 
 tables:
 	julia scripts/generate_tables.jl
+	python3 scripts/analyze_trained_qft.py
+
+training_plots:
+	julia scripts/plot_training_curves.jl
 
 benchmarks:
 	bash scripts/copy_benchmarks.sh
