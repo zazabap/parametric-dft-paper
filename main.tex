@@ -101,8 +101,15 @@ The rest of the paper proceeds as follows.
 % ============================================================================
 % FRAMEWORK: FROM COOLEY--TUKEY FFT TO A PARAMETRIC CIRCUIT
 % ============================================================================
-\section{Framework: from the Cooley--Tukey FFT to a parametric circuit}
+\section{Cooley--Tukey FFT to Parametric Circuit}
 \label{sec:background}
+
+\begin{figure*}[!tbp]
+  \centering
+  \includegraphics[width=\textwidth]{cooley_tukey_to_qft.pdf}
+  \caption{Four transformations that turn the Cooley--Tukey FFT into a parametric circuit, drawn for $k = 4$ qubits ($N = 16$). (a)~\emph{Re-index}: the length-$N$ vector is read as a rank-$k$ tensor with one binary leg per qubit. (b)~\emph{Recurse}: one Cooley--Tukey level factors $F_n$ into a half-size DFT, a block-diagonal conditional twiddle, and an outer Hadamard on $q_0$. (c)~\emph{Decompose}: the conditional twiddle becomes a chain of $k{-}1$ controlled-phase gates $M_j$ coupling $q_0$ to each lower-significance qubit. (d)~\emph{Relax}: unrolling the recursion yields a circuit of $k$ Hadamards and $k(k-1)/2$ controlled-phase gates; relaxing each gate into a free element of $U(2)$ or $U(1)^4$ produces the parametric circuit trained in \cref{sec:circuits,sec:training}.}
+  \label{fig:cooley_tukey_to_qft}
+\end{figure*}
 
 This section derives the parametric circuit that the rest of the paper trains.
 Starting from the Cooley--Tukey FFT, we apply four local transformations to the underlying tensor network---\emph{re-index}, \emph{recurse}, \emph{decompose}, and \emph{relax}---ending with a circuit whose gates are free elements of the unitary manifold.
@@ -110,17 +117,36 @@ The construction is implemented in the open-source Julia library \texttt{Paramet
 
 \subsection{Cooley--Tukey decomposition}
 
-The DFT matrix of size $n = 2^k$ is $(F_n)_{ij} = \omega^{(i-1)(j-1)}$ with $\omega = e^{-2\pi i/n}$.
-The Cooley--Tukey algorithm decomposes it into a butterfly structure:
+The DFT matrix of size $n = 2^k$ has entries $(F_n)_{i,j} = \omega^{(i-1)(j-1)}$ with $\omega = e^{-2\pi i / n}$ the primitive $n$-th root of unity, so that $F_n$ is the Vandermonde matrix
+\begin{equation}
+  F_n = \begin{pmatrix}
+    1 & 1 & 1 & \cdots & 1 \\
+    1 & \omega & \omega^2 & \cdots & \omega^{n-1} \\
+    1 & \omega^2 & \omega^4 & \cdots & \omega^{2(n-1)} \\
+    \vdots & \vdots & \vdots & \ddots & \vdots \\
+    1 & \omega^{n-1} & \omega^{2(n-1)} & \cdots & \omega^{(n-1)^2}
+  \end{pmatrix}.
+  \label{eq:vandermonde}
+\end{equation}
+Split the columns by parity (odd $j = 1, 3, \ldots$; even $j = 2, 4, \ldots$) and the rows at $n/2$. Each of the four resulting $(n/2) \times (n/2)$ blocks reduces to the half-size DFT up to the twiddle $D_{n/2} = \diag(1, \omega, \ldots, \omega^{n/2-1})$:
+\begin{equation}
+  \begin{aligned}
+    {[F_n]}^{\text{odd}}_{\text{top}} &= {[F_n]}^{\text{odd}}_{\text{bot}} = F_{n/2}, \\
+    {[F_n]}^{\text{even}}_{\text{top}} &= -{[F_n]}^{\text{even}}_{\text{bot}} = D_{n/2}\, F_{n/2},
+  \end{aligned}
+  \label{eq:blocks}
+\end{equation}
+using $(\omega^2)^{(i-1)(j-1)} = (F_{n/2})_{i,j}$ for the odd columns, $\omega^n = 1$ for the bottom-odd block, and $\omega^{n/2} = -1$ for the bottom-even block.
+Permuting $\mathbf{x}$ so that odd-indexed entries precede even-indexed entries and assembling the four blocks gives the Cooley--Tukey factorization
 \begin{equation}
   F_n \mathbf{x}
   = \begin{pmatrix} I_{n/2} & D_{n/2} \\ I_{n/2} & -D_{n/2} \end{pmatrix}
     \begin{pmatrix} F_{n/2} & 0 \\ 0 & F_{n/2} \end{pmatrix}
-    \begin{pmatrix} \mathbf{x}_{\text{odd}} \\ \mathbf{x}_{\text{even}} \end{pmatrix},
+    \begin{pmatrix} \mathbf{x}_{\text{odd}} \\ \mathbf{x}_{\text{even}} \end{pmatrix}.
   \label{eq:fft}
 \end{equation}
-where $D_{n/2} = \diag(1, \omega, \omega^2, \ldots, \omega^{n/2-1})$ is the twiddle-factor matrix.
-Equation~\eqref{eq:fft} is the input to the tensor-network construction.
+Applied recursively, each level reduces an $n$-point DFT to two $(n/2)$-point DFTs plus $O(n)$ twiddle multiplications, giving total cost $O(N \log N)$.
+\Cref{eq:fft} is the input to the tensor-network construction.
 
 \subsection{Building the parametric circuit}
 \label{sec:gate_decomposition}
@@ -128,14 +154,20 @@ Equation~\eqref{eq:fft} is the input to the tensor-network construction.
 \emph{Re-index} (\cref{fig:cooley_tukey_to_qft}a). A vector of length $n = 2^k$ carries a single integer index that we write in binary as $i = q_0 + 2 q_1 + \cdots + 2^{k-1} q_{k-1}$.
 Re-interpreting $\mathbf{x}$ as a rank-$k$ tensor with one binary leg $q_j$ per qubit is purely notational, but it turns every linear operator in~\cref{eq:fft} into a tensor-network component acting on specific qubit legs, which is what makes the gate decomposition below possible.
 
-\emph{Recurse} (\cref{fig:cooley_tukey_to_qft}b). With $q_0$ taken as the most-significant bit, the leftmost factor of~\cref{eq:fft} factors as $(H \otimes I_{n/2}) \, [I_{n/2}, 0; 0, D_{n/2}]$, so that
+\emph{Recurse} (\cref{fig:cooley_tukey_to_qft}b). Take $q_0$ as the most-significant bit labelling the top and bottom row-blocks of~\cref{eq:fft}. The outer block matrix factors through the butterfly identity
+\begin{equation}
+  \begin{pmatrix} I_{n/2} & D_{n/2} \\ I_{n/2} & -D_{n/2} \end{pmatrix}
+  = (H \otimes I_{n/2})
+    \begin{pmatrix} I_{n/2} & 0 \\ 0 & D_{n/2} \end{pmatrix},
+  \label{eq:butterfly-id}
+\end{equation}
+with $H = \bigl(\begin{smallmatrix} 1 & 1 \\ 1 & -1 \end{smallmatrix}\bigr)$ the unnormalized Hadamard matrix. Substituting into~\cref{eq:fft} gives
 \begin{equation}
   F_n \;=\; \bigl( H \otimes I_{n/2} \bigr) \,
             \begin{pmatrix} I_{n/2} & 0 \\ 0 & D_{n/2} \end{pmatrix} \,
-            \bigl( I_2 \otimes F_{n/2} \bigr),
+            \bigl( I_2 \otimes F_{n/2} \bigr).
   \label{eq:butterfly}
 \end{equation}
-where $H = \bigl(\begin{smallmatrix} 1 & 1 \\ 1 & -1 \end{smallmatrix}\bigr)$ is the (unnormalized) Hadamard matrix.
 The rightmost factor applies $F_{n/2}$ to the sub-register $(q_1, \ldots, q_{k-1})$; the middle factor is a diagonal twiddle conditioned on $q_0$; the leftmost factor is a Hadamard acting on $q_0$ alone.
 
 \emph{Decompose} (\cref{fig:cooley_tukey_to_qft}c). The conditional twiddle in the middle of~\cref{eq:butterfly} factors into two-qubit controlled-phase gates.
@@ -153,13 +185,6 @@ The complete network has $k$ Hadamards (one per qubit) and $k(k-1)/2$ controlled
 This fixed circuit is the standard Quantum Fourier Transform.
 To obtain a \emph{parametric} circuit we relax each gate into a free element of its unitary manifold: every Hadamard becomes an unconstrained element of $U(2)$ (four real parameters), and every $M_j$ becomes an unconstrained element of $\diag(1, 1, 1, e^{i\phi_j}) \in U(1)^4$ (one real parameter).
 The resulting circuit has $4k + k(k-1)/2 = O(\log^2 N)$ real parameters in the image side $N = 2^k$, contains the classical DFT at the QFT parameter point, and is unitary at every parameter setting by construction.
-
-\begin{figure*}[t]
-\centering
-\includegraphics[width=\textwidth]{cooley_tukey_to_qft.pdf}
-\caption{Four transformations that turn the Cooley--Tukey FFT into a parametric circuit, drawn for $k = 4$ qubits ($N = 16$). (a)~\emph{Re-index}: the length-$N$ vector is read as a rank-$k$ tensor with one binary leg per qubit. (b)~\emph{Recurse}: one Cooley--Tukey level factors $F_n$ into a half-size DFT, a block-diagonal conditional twiddle, and an outer Hadamard on $q_0$. (c)~\emph{Decompose}: the conditional twiddle becomes a chain of $k{-}1$ controlled-phase gates $M_j$ coupling $q_0$ to each lower-significance qubit. (d)~\emph{Relax}: unrolling the recursion yields a circuit of $k$ Hadamards and $k(k-1)/2$ controlled-phase gates; relaxing each gate into a free element of $U(2)$ or $U(1)^4$ produces the parametric circuit trained in \cref{sec:circuits,sec:training}.}
-\label{fig:cooley_tukey_to_qft}
-\end{figure*}
 
 \subsection{Two-dimensional transforms and parameter count}
 
@@ -212,7 +237,7 @@ This extension has several properties:
   \item Setting $\phi_k = 0$ for all $k$ recovers the separable QFT.
 \end{enumerate}
 
-\begin{figure*}[t]
+\begin{figure*}[!tbp]
 \centering
 \includegraphics[width=0.85\textwidth]{entangled_qft_circuit.pdf}
 \caption{Entangled QFT circuit for $n=4$ qubits per dimension. Row qubits $x_k$ and column qubits $y_k$ each pass through independent QFT circuits (Hadamard gates $H$ and controlled-phase gates $M_j$). Entanglement gates $E_k$ couple corresponding row--column pairs, introducing cross-dimensional correlations.}
@@ -225,8 +250,6 @@ This extension has several properties:
 To stress-test the claim that cross-dimensional, all-to-all coupling is the decisive structural ingredient, we also implement two connectivity foils: a TEBD-style~\cite{vidal2004tebd} \emph{ring} (nearest-neighbor controlled-phase gates with wrap-around, $O(n)$ depth, $2n$ phase parameters total) and a MERA-inspired~\cite{vidal2007mera} \emph{hierarchical} circuit (disentanglers and isometries at increasing strides, $O(\log n)$ depth, $4(n-1)$ phase parameters).
 Both share the same $U(2)$ Hadamard layer as the QFT but replace its all-to-all phase chain with local or multi-scale connectivity.
 Their gate-level construction and circuit diagrams are deferred to~\cref{app:alt_topologies}; we use them here purely as controls in the topology comparison of~\cref{sec:topology_div2k}.
-
-\subsection{Summary of circuit properties}
 
 \begin{table}[tbp]
 \centering
@@ -383,89 +406,73 @@ This experiment ranks topologies within the full-image (block size $=$ 256) unit
 
 \begin{table}[tbp]
 \centering
-\caption{Topology comparison on DIV2K ($256 \times 256$, 8 qubits, MSE loss). All four circuit topologies including MERA. PSNR (dB) / SSIM; best learned result in \textbf{bold}.}
-\label{tab:topology}
-\resizebox{\columnwidth}{!}{\input{tables/div2k_8q}}
+\caption{DIV2K test image \texttt{0390.png} at $256 \times 256$ (8 qubits, MSE loss). PSNR (dB) / SSIM at four keep ratios. Fixed baselines (FFT, full-image DCT, $8 \times 8$ BlockDCT) are computed directly; the four learned rows use the trained bases from \texttt{results/div2k\_8q\_generalized/}. Best learned result in \textbf{bold}.}
+\label{tab:div2k_0390}
+\resizebox{\columnwidth}{!}{\input{tables/div2k_0390}}
 \end{table}
 
-Across all compression ratios the Entangled QFT achieves the best or tied-best PSNR/SSIM among learned bases, the separable QFT tracks close behind, and TEBD remains the weakest learned topology.
-The MERA-inspired basis, with hierarchical multi-scale connectivity and $O(\log n)$ circuit depth, falls between the QFT family and TEBD: hierarchical structure helps, but less than the cross-dimensional all-to-all coupling of the Entangled QFT.
-The ranking is stable: Entangled QFT $>$ QFT $>$ MERA $>$ TEBD $>$ FFT.
-Quick Draw results (\cref{tab:quickdraw_mse}) reproduce the same ordering at 5-qubit scale.
+The four learned topologies (QFT, Entangled QFT, TEBD, MERA) sit within $\sim 1$~dB of one another at every keep ratio on this image, with the separable QFT slightly ahead and MERA trailing.
 
 For the remainder of this section we take the separable QFT as a representative member of this family and study \emph{where} it sits along the block-size axis once trained.
 
 \subsection{The block-size axis: QFT, DCT and BlockDCT}
 \label{sec:blocksize}
 
-\begin{table}[tbp]
-\centering
-\caption{Frequency-space summary on DIV2K ($256 \times 256$, 8 qubits), averaged over 20 test images. PSNR (dB) / SSIM at four keep ratios. Best per-column result in \textbf{bold}.}
-\label{tab:freqspace}
-\resizebox{\columnwidth}{!}{\input{tables/freqspace_div2k_8q}}
-\end{table}
-
-\cref{tab:freqspace} is the central result of this paper.
-Reading the table top-to-bottom traces the block-size axis from the full image down to an $8 \times 8$ JPEG block, with the learned QFT interpolating between full-image DCT and $8 \times 8$ BlockDCT.
+\cref{tab:div2k_0390} is the central result of this paper.
+Reading the fixed-baseline rows top-to-bottom traces the block-size axis from the full image down to an $8 \times 8$ JPEG block, with the learned QFT interpolating between full-image DCT and $8 \times 8$ BlockDCT.
 Three effects are visible at 20\% keep (the column that matters most for practical compression):
 \begin{enumerate}
-  \item \emph{Data-adaptive orientation gives $+1.3$~dB.} Full-image DCT (26.76 dB) beats full-image FFT (25.45 dB) by $+1.3$~dB because its real-valued cosine basis aligns better with natural-image statistics than the DFT's complex basis, while the block size is the same.
-  \item \emph{Block structure gives $+4.5$~dB.} BlockDCT at $8 \times 8$ (31.27 dB) beats full-image DCT by $+4.5$~dB; this is by far the largest single effect in the table, and it is driven entirely by the change in block size, not by a change in the basis within a block.
-  \item \emph{Training recovers about $2/3$ of the block-structure benefit.} The learned QFT (29.36 dB) beats full-image DCT by $+2.6$~dB and closes roughly $2/3$ of the gap to BlockDCT; the remaining $1.9$~dB is the residual advantage of an explicit, hand-designed block prior over a learned, implicit one.
+  \item \emph{Data-adaptive orientation gives $+1.4$~dB.} Full-image DCT (27.08~dB) beats full-image FFT (25.69~dB) by $+1.4$~dB because its real-valued cosine basis aligns better with natural-image statistics than the DFT's complex basis, while the block size is the same.
+  \item \emph{Block structure gives $+4.1$~dB.} BlockDCT at $8 \times 8$ (31.16~dB) beats full-image DCT by $+4.1$~dB; this is by far the largest single effect in the table, and it is driven entirely by the change in block size, not by a change in the basis within a block.
+  \item \emph{Training recovers about $2/3$ of the block-structure benefit.} The learned QFT (29.71~dB) beats full-image DCT by $+2.6$~dB and closes roughly $2/3$ of the gap to BlockDCT; the remaining $1.5$~dB is the residual advantage of an explicit, hand-designed block prior over a learned, implicit one.
 \end{enumerate}
 
-The same ordering holds on SSIM (FFT 0.741 $<$ DCT 0.775 $<$ QFT 0.869 $<$ BDCT 0.895) and at every keep ratio.
+The same ordering holds on SSIM (FFT 0.751 $<$ DCT 0.765 $<$ QFT 0.936 $<$ BDCT 0.952) and at every keep ratio.
 In~\cref{sec:emergence} we show that the position the QFT occupies between DCT and BlockDCT is not accidental: the training has \emph{spontaneously} produced a block-structured transform.
 
 \subsection{Frequency-space analysis on a representative image}
 \label{sec:freqspace}
 
-To visualize what the four transforms are actually doing, we pick a representative DIV2K test image (\texttt{0390.png}) and compare their frequency-space representations, kept-coefficient masks, and reconstructions.
-On this image the four transforms at 20\% keep achieve FFT 25.69~/~0.751, DCT 27.08~/~0.765, QFT 29.71~/~0.922, BlockDCT 31.16~/~0.952 (PSNR~/~SSIM), broadly tracking the 20-image means.
+To visualize what the four transforms are actually doing on \texttt{0390.png}, we compare their frequency-space representations, kept-coefficient masks, and reconstructions; the per-method PSNR and SSIM at four keep ratios are the fixed-baseline and learned-QFT rows of \cref{tab:div2k_0390}.
 
-\begin{figure*}[t]
+\begin{figure}[!tbp]
 \centering
-\includegraphics[width=0.85\textwidth]{freqspace/spectra_0390}
-\caption{2D log-magnitude frequency-space representations of \texttt{0390.png} (DIV2K, $256 \times 256$), from top to bottom: FFT, full-image DCT, BlockDCT ($8 \times 8$), and the trained QFT.
-The FFT concentrates energy near the center of the Fourier plane; the full-image DCT compacts energy into the top-left corner; BlockDCT tiles that compaction into sharp, independent $8 \times 8$ tiles; the learned QFT exhibits a \emph{coarser, softer} tiling.
-A complementary 3D view of the same spectra appears in~\cref{fig:spectra_3d_0390}.}
-\label{fig:spectra_0390}
-\end{figure*}
-
-\begin{figure*}[t]
+\begin{subfigure}{\columnwidth}
 \centering
-\includegraphics[width=0.85\textwidth]{freqspace/masks_0390}
-\caption{Top-$k$ kept-coefficient masks for \texttt{0390.png} at $k/N = 5\%,10\%,15\%,20\%$.
-FFT retains a low-frequency disk; DCT retains a low-frequency corner; BlockDCT retains a low-frequency cluster within each $8 \times 8$ tile; the learned QFT retains a soft pattern whose local structure resembles BlockDCT but on a visibly larger scale.}
-\label{fig:masks_0390}
-\end{figure*}
-
-\FloatBarrier
-
-\begin{figure*}[t]
+\includegraphics[width=\columnwidth]{freqspace/spectra_0390}
+\subcaption{2D log-magnitude heatmaps.}
+\label{fig:spectra_0390_2d}
+\end{subfigure}\\[4pt]
+\begin{subfigure}{\columnwidth}
 \centering
-\includegraphics[width=0.95\textwidth]{freqspace/spectra_3d_0390}
-\caption{Three-dimensional log-magnitude spectra of \texttt{0390.png} for FFT, full-image DCT, BlockDCT ($8 \times 8$), and the learned QFT.
-The 3D view emphasizes block-boundary \emph{sharpness}: BlockDCT is an array of sharp independent tiles, while the learned QFT is a softer, coarser tiling, consistent with larger effective blocks and non-exact block boundaries.}
+\includegraphics[width=\columnwidth]{freqspace/spectra_3d_0390}
+\subcaption{Same spectra in 3D, emphasizing block-boundary sharpness.}
 \label{fig:spectra_3d_0390}
-\end{figure*}
+\end{subfigure}
+\caption{Frequency-space representations of \texttt{0390.png} (DIV2K, $256 \times 256$) for FFT, full-image DCT, BlockDCT ($8 \times 8$), and the trained QFT. (a) The FFT concentrates energy near the center, the full-image DCT in the top-left corner, BlockDCT in per-tile corners, and the learned QFT in a \emph{coarser, softer} tiling. (b) The 3D view makes the block-boundary contrast explicit: BlockDCT is an array of sharp independent tiles, while the learned QFT exhibits softer, coarser tiles, consistent with larger effective blocks and non-exact block boundaries.}
+\label{fig:spectra_0390}
+\end{figure}
 
-\FloatBarrier
-
-\begin{figure}[htbp]
+\begin{figure}[!tbp]
 \centering
-\includegraphics[width=0.95\columnwidth]{freqspace/cumulative_energy_0390}
-\caption{Cumulative energy capture vs.\ fraction of coefficients kept on \texttt{0390.png}. BlockDCT captures energy fastest, the trained QFT second, full-image DCT third, and FFT last.
-The slope of each curve near the origin determines compression quality: block-structured transforms concentrate energy in a smaller coefficient set.}
+\includegraphics[width=\columnwidth]{freqspace/masks_0390}
+\caption{Top-$k$ kept-coefficient masks for \texttt{0390.png} at $k/N = 5\%,10\%,15\%,20\%$. FFT retains a low-frequency disk; DCT retains a low-frequency corner; BlockDCT retains a low-frequency cluster within each $8 \times 8$ tile; the learned QFT retains a soft pattern whose local structure resembles BlockDCT but on a visibly larger scale.}
+\label{fig:masks_0390}
+\end{figure}
+
+\begin{figure}[!tbp]
+\centering
+\includegraphics[width=\columnwidth]{freqspace/cumulative_energy_0390}
+\caption{Cumulative energy capture vs.\ fraction of coefficients kept on \texttt{0390.png}, for all seven methods of \cref{tab:div2k_0390}. BlockDCT captures energy fastest, followed by the four learned bases (QFT $>$ Entangled QFT $\approx$ TEBD $>$ MERA) in a tight bundle, then full-image DCT, and FFT last. The four learned topologies produce nearly identical curves, consistent with their $\sim\!1$~dB PSNR spread in \cref{tab:div2k_0390}; the 2D spectra and kept-coefficient masks of the three additional learned bases are visually indistinguishable from the separable QFT panels and are relegated to \cref{app:extra_spectra}.}
 \label{fig:cumenergy_0390}
 \end{figure}
 
-\begin{figure*}[t]
+\begin{figure}[!tbp]
 \centering
-\includegraphics[width=0.95\textwidth]{freqspace/reconstructions_0390}
+\includegraphics[width=\columnwidth]{freqspace/reconstructions_0390}
 \caption{Reconstructions of \texttt{0390.png} at $k/N = 5\%,10\%,15\%,20\%$ for FFT, full-image DCT, BlockDCT ($8\times 8$), and the trained QFT.}
 \label{fig:recon_0390}
-\end{figure*}
+\end{figure}
 
 The visual evidence in~\cref{fig:spectra_0390,fig:masks_0390,fig:cumenergy_0390} is consistent with a simple reading: BlockDCT and QFT both apply a block-structured prior, but the block scale is different, and the QFT's block boundaries are soft rather than sharp.
 We now show that this reading has a precise mechanical explanation in the trained QFT's gate parameters.
@@ -490,23 +497,12 @@ A proper Hadamard creates superposition across the $|0\rangle/|1\rangle$ states 
 A $Z$-like or $X$-like gate does \emph{not} create superposition: the computational-basis amplitudes are preserved (with possible sign or bit flips), and that qubit no longer participates in the DFT mixing.
 Consequently, every qubit whose Hadamard-role gate has frozen to $Z$-like or $X$-like behaves as a \emph{classical block index}, and the transform factors into blocks of size $2^{m_{\mathrm{free}}} \times 2^{n_{\mathrm{free}}}$ pixels, where $m_{\mathrm{free}}$ and $n_{\mathrm{free}}$ are the number of still-mixing qubits in each dimension.
 
-\begin{figure}[htbp]
+\begin{figure}[tbp]
 \centering
-\includegraphics[width=0.9\columnwidth]{hadamard_freezing.pdf}
-\caption{The 8 Hadamard-role gates of one dimension (row) of the QFT circuit before and after training on DIV2K at $256 \times 256$.
-Before training, every gate is a proper Hadamard ($H$).
-After training, 4 of the 8 gates---on qubits $q_4,\ldots,q_7$---have collapsed to near-$Z$ (i.e.\ $\approx \mathrm{diag}(+1,-1)$) and no longer mix the computational basis.
-Those 4 qubits act as classical block indices, factoring the transform into $2^4 = 16$ blocks of side $16$ pixels along this dimension.
-The column dimension shows the same cutoff (one of its 4 frozen gates is $X$-like rather than $Z$-like, with equivalent block-index effect).}
+\includegraphics[width=\columnwidth]{hadamard_freezing.pdf}
+\caption{Schematic of the frozen-gate phenomenon on a 4-qubit parametric QFT (same topology as \cref{fig:cooley_tukey_to_qft}d). (a)~At initialization every Hadamard-role gate is $H$. (b)~After training, half of them (violet border) have collapsed to near-$Z$ and no longer mix the computational basis; the $M$ gates stay full $U(1)^4$. The actual trained basis on DIV2K $256 \times 256$ has $m = n = 8$ per dimension and shows the same pattern: 4 of 8 Hadamard-role gates freeze per dimension (3 near-$Z$ plus 1 near-$X$ in the column dim), yielding an effective $2^4 \times 2^4 = 16 \times 16$-pixel block transform. Gate labels are read directly from \texttt{load\_basis("trained\_qft.json")}.}
 \label{fig:hadamard_freezing}
 \end{figure}
-
-\begin{table}[tbp]
-\centering
-\caption{Per-qubit classification of the 16 Hadamard-role gates in the trained QFT on DIV2K ($256 \times 256$). Bold entries are frozen (no DFT mixing).}
-\label{tab:gate_classification}
-\resizebox{0.55\columnwidth}{!}{\input{tables/qft_gate_classification}}
-\end{table}
 
 \begin{table}[tbp]
 \centering
@@ -515,26 +511,26 @@ The column dimension shows the same cutoff (one of its 4 frozen gates is $X$-lik
 \resizebox{0.7\columnwidth}{!}{\input{tables/qft_gate_summary}}
 \end{table}
 
-\cref{tab:gate_classification,tab:gate_summary} show the result.
+\cref{fig:hadamard_freezing,tab:gate_summary} show the result.
 In both dimensions, qubits 0--3 retain their Hadamard role and qubits 4--7 freeze to $Z$-like (with a single $X$-like in the column dimension).
 The freezing is \emph{not} a smooth decay: the off-diagonal magnitudes of the frozen gates sit at the $\sim\!1\%$ level, essentially quantized to the $Z$-like or $X$-like endpoints.
 Meanwhile all 56 controlled-phase gates retain their full $U(1)^4$ parameterization (none have collapsed to the identity), so the \emph{intra-block} transform remains rich.
 
-This produces a clean mechanical reading of the block-size axis in~\cref{tab:freqspace}:
+This produces a clean mechanical reading of the block-size axis in~\cref{tab:div2k_0390}:
 BlockDCT sits at block size $2^{3} = 8$ by hand design (each dimension has 3 frozen bits by construction);
 the trained QFT sits at block size $2^{4} = 16$ because training has frozen 4 bits per dimension;
 full-image DCT sits at block size $2^{8} = 256$ (no frozen bits).
-The remaining $\sim\!1.9$~dB gap between BlockDCT and QFT is the performance cost of the QFT's \emph{larger, softer} block: its block side is twice that of JPEG's and its boundaries are not sharp.
+The remaining $\sim\!1.5$~dB gap between BlockDCT and QFT is the performance cost of the QFT's \emph{larger, softer} block: its block side is twice that of JPEG's and its boundaries are not sharp.
 
 \FloatBarrier
 
 \subsection{Where the block prior fails: per-image variance}
 \label{sec:per_image}
 
-The 20-image means in~\cref{tab:freqspace} hide an interesting tail: a small number of images where the block prior---hand-designed or learned---simply does not help.
+While \texttt{0390.png} of \cref{tab:div2k_0390} is representative of DIV2K test-set behavior, a small number of images push hard against the block-prior assumption.
 The clearest case is DIV2K test image \texttt{0649.png}.
 At 20\% keep, the four transforms on \texttt{0649.png} achieve FFT 24.03, DCT 25.31, BlockDCT 25.99, QFT 24.21 dB (PSNR).
-The BlockDCT $-$ DCT gap on this image is only $+0.68$~dB, compared with the 20-image mean of $+4.5$~dB: on \texttt{0649}, the block-structure prior gains almost nothing over a full-image DCT.
+The BlockDCT $-$ DCT gap on this image is only $+0.68$~dB, compared with the $\sim\!+4$~dB seen on \texttt{0390} and averaged across the rest of the test set: on \texttt{0649}, the block-structure prior gains almost nothing over a full-image DCT.
 This is also the only image in our evaluation set where the learned QFT underperforms full-image DCT ($-1.10$~dB).
 
 The QFT's failure on \texttt{0649} is therefore not a failure of training: it is the \emph{same} failure mode as BlockDCT.
@@ -545,13 +541,6 @@ Future work that removes the block assumption---for example by adapting the froz
 
 \subsection{Training dynamics}
 \label{sec:training_dynamics}
-
-\begin{table}[tbp]
-\centering
-\caption{Training time (seconds) across datasets (MSE loss).}
-\label{tab:timing}
-\resizebox{\columnwidth}{!}{\input{tables/timing}}
-\end{table}
 
 \begin{figure}[htbp]
 \centering
@@ -572,22 +561,6 @@ The Entangled QFT converges fastest despite having more parameters than the sepa
 TEBD converges to a strictly higher training loss than the QFT variants, consistent with its weaker rate-distortion performance.
 A notable regularization effect: TEBD's validation loss sits below its training loss, indicating that its ring connectivity acts as an implicit regularizer at the cost of underfitting.
 
-Quick Draw rate-distortion numbers are reported in~\cref{tab:quickdraw_mse} for completeness:
-
-\begin{table}[tbp]
-\centering
-\caption{Compression quality on Quick Draw ($32 \times 32$, MSE loss). PSNR (dB) / SSIM at four compression ratios. Best learned result in \textbf{bold}. CLIC baseline comparisons appear in~\cref{tab:clic_mse}.}
-\label{tab:quickdraw_mse}
-\resizebox{\columnwidth}{!}{\input{tables/quickdraw_mse}}
-\end{table}
-
-\begin{table}[tbp]
-\centering
-\caption{Baseline compression quality on CLIC ($512 \times 512$, 9 qubits). PSNR (dB) / SSIM. Only the fixed FFT and DCT transforms are reported; learned-basis runs at 9-qubit resolution are left to future work.}
-\label{tab:clic_mse}
-\resizebox{\columnwidth}{!}{\input{tables/clic_mse}}
-\end{table}
-
 % ============================================================================
 % DISCUSSION
 % ============================================================================
@@ -596,8 +569,8 @@ Quick Draw rate-distortion numbers are reported in~\cref{tab:quickdraw_mse} for 
 \section{Discussion}
 \label{sec:discussion}
 
-The striking feature of~\cref{tab:freqspace} is not that the learned QFT beats FFT or DCT---it does, but by a modest amount---but rather that the dominant performance variable is \emph{block size}, not basis.
-Moving from a full-image Fourier basis to a full-image cosine basis gains $+1.3$~dB at 20\% keep; moving from a full-image cosine basis to an $8 \times 8$ block-wise cosine basis gains another $+4.5$~dB.
+The striking feature of~\cref{tab:div2k_0390} is not that the learned QFT beats FFT or DCT---it does, but by a modest amount---but rather that the dominant performance variable is \emph{block size}, not basis.
+Moving from a full-image Fourier basis to a full-image cosine basis gains $\sim\!1.4$~dB at 20\% keep; moving from a full-image cosine basis to an $8 \times 8$ block-wise cosine basis gains another $\sim\!4.1$~dB.
 This is consistent with decades of block-transform coding experience in image and video compression~\cite{wallace1992jpeg}: block-locality is a strong image-statistics prior, and coefficient selection benefits enormously from being confined to local tiles.
 Our contribution is to place parametric quantum circuits on the same axis: the separable QFT manifold, when trained, leaves the full-image endpoint and discovers an \emph{intermediate} point on the axis, at an effective block size of $2^4 = 16$ pixels.
 
@@ -606,12 +579,12 @@ The remaining Hadamards and all 56 controlled-phase gates carry rich parameteriz
 A clean way to read this is that training has performed an implicit model selection on the block-size axis: starting from the full-image DFT (no frozen Hadamards) and optimizing under the MSE reconstruction objective, gradient descent has moved the solution to a point at which some fraction of the mixing qubits have become classical block indices.
 That the stopping point is 4 frozen bits per dimension---corresponding to JPEG-$2 \times$---rather than 3 (JPEG-equivalent) or 5 (MPEG-equivalent), is a property of natural-image statistics as seen through the DIV2K training distribution.
 
-Two factors account for the residual $\sim\!1.9$~dB gap.
+Two factors account for the residual $\sim\!1.5$~dB gap.
 First, the QFT's effective block is twice as large as JPEG's ($16 \times 16$ vs $8 \times 8$), so its coefficient budget per block is four times larger and its intra-block compaction is correspondingly weaker.
 Second, the QFT's block boundaries are \emph{soft}: the off-diagonal magnitudes of the frozen Hadamards are at the $\sim\!1\%$ level, not zero, so a small amount of cross-block mixing remains.
 Both of these effects could in principle be closed by a block-aware parametric unitary architecture in which block size is itself a learnable structural prior and the block boundary is exact by construction.
 
-The topology ranking in~\cref{tab:topology}---Entangled QFT $>$ QFT $>$ MERA $>$ TEBD---is best read as a ranking \emph{within} the full-image unitary family.
+The topology ranking in~\cref{tab:div2k_0390}---the four learned circuits sitting within $\sim 1$~dB of one another---is best read as a ranking \emph{within} the full-image unitary family.
 The Entangled QFT's $n$ cross-dimensional phases outperform TEBD's $2n$ ring-topology phases because they connect degrees of freedom that are relevant to the 2D structure of images; TEBD's local ring connectivity is simply the wrong inductive bias for natural images.
 The MERA-inspired basis, with hierarchical multi-scale connectivity, lies between these two.
 All of this is orthogonal to the block-size axis: the Entangled QFT can be composed with a block structure, and the resulting basis would inherit both advantages.
@@ -757,11 +730,24 @@ For $n = 2^k$ qubits, the circuit has $\log_2 n$ layers with stride $2^{l-1}$ in
 The hierarchical connectivity captures multi-scale features: layer~1 mixes nearest neighbors, deeper layers mix distant qubits.
 MERA's purpose in our comparison is to test whether \emph{multi-scale} connectivity (a weaker form of all-to-all) suffices to match the Entangled QFT; \cref{sec:topology_div2k} shows that it does not.
 
-\begin{figure*}[t]
+\begin{figure*}[!tbp]
 \centering
 \includegraphics[width=0.85\textwidth]{mera_circuit.pdf}
 \caption{MERA-inspired circuit for $n=8$ row and column qubits. Disentanglers $D$ and isometries $W$ follow hierarchical connectivity: layer~1 (stride~1) connects nearest neighbors, layer~2 (stride~2) at distance~2, layer~3 (stride~4) connects distant qubits.}
 \label{fig:mera}
+\end{figure*}
+
+\FloatBarrier
+\section{Spectra and masks for the other learned bases}
+\label{app:extra_spectra}
+
+\Cref{fig:extra_spectra_0390} shows the 2D log-magnitude spectra and top-$k$ kept-coefficient masks of \texttt{0390.png} for the four learned bases (separable QFT, Entangled QFT, TEBD, MERA). The separable-QFT row reproduces the corresponding panels of \cref{fig:spectra_0390,fig:masks_0390} for side-by-side comparison. The three additional topologies produce spectra and masks that are visually indistinguishable from the separable QFT at this resolution, consistent with the sub-$1$~dB PSNR spread in \cref{tab:div2k_0390} and the tight bundle of cumulative-energy curves in \cref{fig:cumenergy_0390}.
+
+\begin{figure*}[!tbp]
+\centering
+\includegraphics[width=\textwidth]{freqspace/extra_spectra_0390}
+\caption{Per-method comparison on \texttt{0390.png} for the four learned bases. Column~1: 2D log-magnitude spectrum (log$_{10}$ of peak-normalized magnitude). Columns~2--5: top-$k$ kept-coefficient masks at $k/N = 5\%, 10\%, 15\%, 20\%$. Rows correspond to QFT, Entangled QFT, TEBD, and MERA, respectively.}
+\label{fig:extra_spectra_0390}
 \end{figure*}
 
 \end{document}
