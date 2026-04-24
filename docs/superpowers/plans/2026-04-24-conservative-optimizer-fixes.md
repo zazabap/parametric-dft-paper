@@ -10,6 +10,13 @@
 
 **Spec:** `docs/superpowers/specs/2026-04-24-conservative-optimizer-fixes-design.md`
 
+**Working directories (important — use sibling clones, not submodules).** The paper repo has submodule checkouts at `parametric-dft-paper/ParametricDFT.jl` and `parametric-dft-paper/ParametricDFT-Benchmarks.jl`, but the sibling clones at `/home/claude-user/ParametricDFT.jl` and `/home/claude-user/ParametricDFT-Benchmarks.jl` have:
+- **Julia precompile cache** for the full dependency set (CUDA, Zygote, OMEinsum, CairoMakie, Manopt, Manifolds) — drastically faster test + benchmark runs.
+- **DIV2K dataset** (800 images, ~4 GB) already on disk at `/home/claude-user/ParametricDFT-Benchmarks.jl/data/DIV2K_train_HR/` — the full DIV2K rerun would otherwise require re-downloading.
+- **Path-resolved dev dep**: `/home/claude-user/ParametricDFT-Benchmarks.jl/Project.toml` has `ParametricDFT = {path = "../.."}` pointing to `/home/claude-user/ParametricDFT.jl`, so a change in the sibling library is immediately visible to the sibling benchmarks without a submodule-pointer update.
+
+All library/benchmark edits and runs happen in the siblings. The paper-repo submodules are synced from `origin` at the very end (Task 17). Task 0 below realigns the sibling library to the submodule's branch before any edits.
+
 ---
 
 ## File structure
@@ -40,11 +47,52 @@
 
 ---
 
+## Task 0: Align sibling ParametricDFT.jl with the submodule's branch
+
+**Context:** The sibling at `/home/claude-user/ParametricDFT.jl` is currently on feature branch `docs/batchGPU-notes-split` at `ba42960`. The paper's submodule points at `79117aa`, which is on `main`. These two histories diverge after `dcc97af`. Before making library edits, realign the sibling to a branch rooted at the submodule's pointer so changes merge cleanly back.
+
+**Files:** working-tree state of `/home/claude-user/ParametricDFT.jl`.
+
+- [ ] **Step 1: Inspect both lineages side by side**
+
+```bash
+git -C /home/claude-user/ParametricDFT.jl log --oneline --all -10
+git -C /home/claude-user/parametric-dft-paper/ParametricDFT.jl log --oneline -3
+```
+
+Confirm that the submodule's HEAD commit (currently `79117aa`) is reachable from `origin/main` in the sibling (`git -C /home/claude-user/ParametricDFT.jl branch -a --contains 79117aa` should include `remotes/origin/main`). If not, abort and investigate.
+
+- [ ] **Step 2: Stash any sibling uncommitted work, then branch from the submodule's pointer**
+
+```bash
+cd /home/claude-user/ParametricDFT.jl
+git stash push -u -m "pre-optimizer-fix sibling state" 2>&1 | tail
+git fetch origin
+# Create a local branch rooted exactly at the submodule's current pointer
+SUBMODULE_SHA=$(git -C /home/claude-user/parametric-dft-paper/ParametricDFT.jl rev-parse HEAD)
+echo "Submodule SHA: $SUBMODULE_SHA"
+git checkout -B optimizer-fixes "$SUBMODULE_SHA"
+```
+
+The working tree now matches the paper submodule exactly. Julia's compile cache (`~/.julia/compiled/*`) is still warm because it's keyed on dependency versions (pinned by `Project.toml` + `Manifest.toml`), not on source-file content.
+
+- [ ] **Step 3: Warm-check that tests still run on this base**
+
+```bash
+julia --project=. -e 'using Pkg; Pkg.test()' 2>&1 | tail -15
+```
+
+Expected: all existing tests pass. This is the baseline; every later task must keep this green.
+
+- [ ] **Step 4: No commit — this is pure setup.**
+
+---
+
 ## Task 1: Add `max_grad_norm` field to `RiemannianGD`
 
-**Files:**
-- Modify: `ParametricDFT.jl/src/optimizers.jl:156-164`
-- Test: `ParametricDFT.jl/test/optimizer_tests.jl`
+**Files (sibling clone, `/home/claude-user/ParametricDFT.jl`):**
+- Modify: `src/optimizers.jl:156-164`
+- Test: `test/optimizer_tests.jl`
 
 - [ ] **Step 1: Write the failing test** — append to `test/optimizer_tests.jl` inside the existing `@testset "Riemannian Optimizers (New API)"`:
 
@@ -63,9 +111,11 @@ end
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-cd ParametricDFT.jl
-julia --project=. -e 'using Pkg; Pkg.test(; test_args=["--filter", "RiemannianGD max_grad_norm field"])'
+cd /home/claude-user/ParametricDFT.jl
+julia --project=. -e 'using Pkg; Pkg.test()'
 ```
+
+(The `--filter` kwarg is not universally supported; running the full suite is fast due to the compile cache.)
 
 Expected: test errors (either `UndefKeywordError: keyword argument max_grad_norm not assigned` or `type RiemannianGD has no field max_grad_norm`).
 
@@ -98,7 +148,7 @@ Expected: all tests pass, including the new `RiemannianGD max_grad_norm field` t
 - [ ] **Step 5: Commit inside the ParametricDFT.jl submodule**
 
 ```bash
-cd ParametricDFT.jl
+cd /home/claude-user/ParametricDFT.jl
 git add src/optimizers.jl test/optimizer_tests.jl
 git commit -m "optimizers: add max_grad_norm field to RiemannianGD"
 ```
@@ -107,9 +157,9 @@ git commit -m "optimizers: add max_grad_norm field to RiemannianGD"
 
 ## Task 2: Add `max_grad_norm` field to `RiemannianAdam`
 
-**Files:**
-- Modify: `ParametricDFT.jl/src/optimizers.jl:171-179`
-- Test: `ParametricDFT.jl/test/optimizer_tests.jl`
+**Files (sibling clone, `/home/claude-user/ParametricDFT.jl`):**
+- Modify: `src/optimizers.jl:171-179`
+- Test: `test/optimizer_tests.jl`
 
 - [ ] **Step 1: Write the failing test** — append inside the same testset as Task 1:
 
@@ -161,7 +211,7 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 - [ ] **Step 5: Commit**
 
 ```bash
-cd ParametricDFT.jl
+cd /home/claude-user/ParametricDFT.jl
 git add src/optimizers.jl test/optimizer_tests.jl
 git commit -m "optimizers: add max_grad_norm field to RiemannianAdam"
 ```
@@ -170,9 +220,9 @@ git commit -m "optimizers: add max_grad_norm field to RiemannianAdam"
 
 ## Task 3: Apply gradient clipping in `_optimization_loop`
 
-**Files:**
-- Modify: `ParametricDFT.jl/src/optimizers.jl` — add `_max_grad_norm` helpers and clipping branch inside `_optimization_loop` (around lines 355-366 where `grad_norm` is computed).
-- Test: `ParametricDFT.jl/test/optimizer_tests.jl`
+**Files (sibling clone, `/home/claude-user/ParametricDFT.jl`):**
+- Modify: `src/optimizers.jl` — add `_max_grad_norm` helpers and clipping branch inside `_optimization_loop` (around lines 355-366 where `grad_norm` is computed).
+- Test: `test/optimizer_tests.jl`
 
 - [ ] **Step 1: Write the failing test** — append to `test/optimizer_tests.jl`:
 
@@ -287,7 +337,7 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 - [ ] **Step 5: Commit**
 
 ```bash
-cd ParametricDFT.jl
+cd /home/claude-user/ParametricDFT.jl
 git add src/optimizers.jl test/optimizer_tests.jl
 git commit -m "optimizers: apply max_grad_norm clipping in _optimization_loop"
 ```
@@ -297,8 +347,8 @@ git commit -m "optimizers: apply max_grad_norm clipping in _optimization_loop"
 ## Task 4: Add `_cosine_with_warmup` private helper
 
 **Files:**
-- Modify: `ParametricDFT.jl/src/training.jl` — add private helper near the top of the file, below the existing imports.
-- Test: `ParametricDFT.jl/test/training_tests.jl`
+- Modify: `src/training.jl` — add private helper near the top of the file, below the existing imports.
+- Test: `test/training_tests.jl`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -370,7 +420,7 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 - [ ] **Step 5: Commit**
 
 ```bash
-cd ParametricDFT.jl
+cd /home/claude-user/ParametricDFT.jl
 git add src/training.jl test/training_tests.jl
 git commit -m "training: add _cosine_with_warmup LR schedule helper"
 ```
@@ -380,8 +430,8 @@ git commit -m "training: add _cosine_with_warmup LR schedule helper"
 ## Task 5: Add `_project_to_manifolds` private helper
 
 **Files:**
-- Modify: `ParametricDFT.jl/src/training.jl` — add the helper below `_cosine_with_warmup`.
-- Test: `ParametricDFT.jl/test/training_tests.jl`
+- Modify: `src/training.jl` — add the helper below `_cosine_with_warmup`.
+- Test: `test/training_tests.jl`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -478,7 +528,7 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 - [ ] **Step 5: Commit**
 
 ```bash
-cd ParametricDFT.jl
+cd /home/claude-user/ParametricDFT.jl
 git add src/training.jl test/training_tests.jl
 git commit -m "training: add _project_to_manifolds helper for SWA retraction"
 ```
@@ -488,8 +538,8 @@ git commit -m "training: add _project_to_manifolds helper for SWA retraction"
 ## Task 6: Drop per-batch inner loop, integrate cosine LR schedule
 
 **Files:**
-- Modify: `ParametricDFT.jl/src/training.jl` — `_train_basis_core` function (around lines 20-180).
-- Test: `ParametricDFT.jl/test/training_tests.jl`
+- Modify: `src/training.jl` — `_train_basis_core` function (around lines 20-180).
+- Test: `test/training_tests.jl`
 
 - [ ] **Step 1: Add a descent test for the refactored training loop**
 
@@ -590,7 +640,7 @@ If preexisting tests fail because they pass `steps_per_image` positionally, upda
 - [ ] **Step 5: Commit**
 
 ```bash
-cd ParametricDFT.jl
+cd /home/claude-user/ParametricDFT.jl
 git add src/training.jl test/training_tests.jl
 git commit -m "training: drop inner loop, integrate cosine LR schedule per batch"
 ```
@@ -600,8 +650,8 @@ git commit -m "training: drop inner loop, integrate cosine LR schedule per batch
 ## Task 7: Wire SWA tracking and final-iterate projection
 
 **Files:**
-- Modify: `ParametricDFT.jl/src/training.jl` — add SWA running mean in the batch loop, return projected SWA iterate at the end.
-- Test: `ParametricDFT.jl/test/training_tests.jl`
+- Modify: `src/training.jl` — add SWA running mean in the batch loop, return projected SWA iterate at the end.
+- Test: `test/training_tests.jl`
 
 - [ ] **Step 1: Add an end-to-end SWA test**
 
@@ -684,7 +734,7 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 - [ ] **Step 5: Commit**
 
 ```bash
-cd ParametricDFT.jl
+cd /home/claude-user/ParametricDFT.jl
 git add src/training.jl test/training_tests.jl
 git commit -m "training: add SWA running mean with manifold projection at end"
 ```
@@ -694,8 +744,8 @@ git commit -m "training: add SWA running mean with manifold projection at end"
 ## Task 8: Add deprecation warning for `steps_per_image`
 
 **Files:**
-- Modify: `ParametricDFT.jl/src/training.jl` — ensure `train_basis` (the public API) passes `steps_per_image` through and warns once.
-- Test: `ParametricDFT.jl/test/training_tests.jl`
+- Modify: `src/training.jl` — ensure `train_basis` (the public API) passes `steps_per_image` through and warns once.
+- Test: `test/training_tests.jl`
 
 - [ ] **Step 1: Write the test**
 
@@ -751,7 +801,7 @@ Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-cd ParametricDFT.jl
+cd /home/claude-user/ParametricDFT.jl
 git add src/training.jl test/training_tests.jl
 git commit -m "training: deprecation warning for steps_per_image kwarg"
 ```
@@ -760,13 +810,13 @@ git commit -m "training: deprecation warning for steps_per_image kwarg"
 
 ## Task 9: Update `TRAINING_PRESETS` in ParametricDFT-Benchmarks.jl
 
-**Files:**
-- Modify: `ParametricDFT-Benchmarks.jl/config.jl:TRAINING_PRESETS` definition (around lines 18-80).
+**Files (sibling clone, `/home/claude-user/ParametricDFT-Benchmarks.jl`):**
+- Modify: `config.jl:TRAINING_PRESETS` definition (around lines 18-80).
 
 - [ ] **Step 1: Inspect current preset structure**
 
 ```bash
-cd ParametricDFT-Benchmarks.jl
+cd /home/claude-user/ParametricDFT-Benchmarks.jl
 sed -n '15,90p' config.jl
 ```
 
@@ -813,16 +863,16 @@ ParametricDFT.train_basis(BasisType, training_images;
 - [ ] **Step 4: Sanity-check the runner imports the updated preset fields with no error**
 
 ```bash
-cd ParametricDFT-Benchmarks.jl
+cd /home/claude-user/ParametricDFT-Benchmarks.jl
 julia --project=. -e 'include("config.jl"); @assert haskey(TRAINING_PRESETS[:generalized], :warmup_frac); println("ok")'
 ```
 
 Expected: `ok`.
 
-- [ ] **Step 5: Commit inside the ParametricDFT-Benchmarks.jl submodule**
+- [ ] **Step 5: Commit inside the sibling ParametricDFT-Benchmarks.jl clone (on `main`)**
 
 ```bash
-cd ParametricDFT-Benchmarks.jl
+cd /home/claude-user/ParametricDFT-Benchmarks.jl
 git add config.jl run_div2k_8q.jl run_quickdraw.jl run_clic.jl run_div2k.jl run_div2k_7q.jl run_mse.jl 2>/dev/null
 git commit -m "config: replace steps_per_image with cosine-schedule + SWA knobs"
 ```
@@ -833,12 +883,12 @@ git commit -m "config: replace steps_per_image with cosine-schedule + SWA knobs"
 
 ## Task 10: Quick Draw smoke run
 
-**Files:** none — runs and inspects existing scripts.
+**Files (sibling clone, `/home/claude-user/ParametricDFT-Benchmarks.jl`):** none modified — runs existing `run_quickdraw.jl` and inspects its outputs. The sibling's dev-dep `ParametricDFT = {path = "../.."}` resolves to the sibling library (Tasks 1–8's edits); no submodule round-trip needed.
 
 - [ ] **Step 1: Run the smoke preset**
 
 ```bash
-cd ParametricDFT-Benchmarks.jl
+cd /home/claude-user/ParametricDFT-Benchmarks.jl
 julia --project=. run_quickdraw.jl smoke 2>&1 | tee /tmp/quickdraw_smoke.log
 ```
 
@@ -855,7 +905,7 @@ Expected: `CLEAN`.
 ```bash
 python3 -c "
 import json
-d = json.loads(open('ParametricDFT-Benchmarks.jl/results/quickdraw/metrics.json').read())
+d = json.loads(open('/home/claude-user/ParametricDFT-Benchmarks.jl/results/quickdraw/metrics.json').read())
 for k in ['qft', 'entangled_qft', 'tebd', 'mera']:
     if k in d:
         h = d[k]['history']
@@ -872,12 +922,12 @@ Expected: reasonable per-step counts (≪ what `steps_per_image * batch_size` wo
 
 ## Task 11: Full DIV2K 8-qubit generalized rerun
 
-**Files:** overwrites `ParametricDFT-Benchmarks.jl/results/div2k_8q_generalized/{metrics.json, trained_*.json, loss_history/, ...}`.
+**Files (sibling clone, `/home/claude-user/ParametricDFT-Benchmarks.jl`):** overwrites `results/div2k_8q_generalized/{metrics.json, trained_*.json, loss_history/, ...}`. The DIV2K dataset already lives at `/home/claude-user/ParametricDFT-Benchmarks.jl/data/DIV2K_train_HR/` (800 images, no re-download needed).
 
 - [ ] **Step 1: Archive the current results for safety**
 
 ```bash
-cd ParametricDFT-Benchmarks.jl
+cd /home/claude-user/ParametricDFT-Benchmarks.jl
 cp -r results/div2k_8q_generalized results/archive/div2k_8q_generalized_pre_optimizer_fix_$(date +%Y%m%d)
 ```
 
@@ -886,6 +936,7 @@ cp -r results/div2k_8q_generalized results/archive/div2k_8q_generalized_pre_opti
 The runner for the generalized preset is `run_div2k_8q.jl generalized` (or whichever argument triggers the generalized preset — inspect the script to confirm):
 
 ```bash
+cd /home/claude-user/ParametricDFT-Benchmarks.jl
 grep -n "generalized" run_div2k_8q.jl | head
 julia --project=. run_div2k_8q.jl generalized 2>&1 | tee /tmp/div2k_generalized_rerun.log
 ```
@@ -897,7 +948,7 @@ If the run takes long, invoke it via `run_in_background=true` and wait; otherwis
 ```bash
 python3 -c "
 import json
-d = json.loads(open('ParametricDFT-Benchmarks.jl/results/div2k_8q_generalized/metrics.json').read())
+d = json.loads(open('/home/claude-user/ParametricDFT-Benchmarks.jl/results/div2k_8q_generalized/metrics.json').read())
 for k in ['qft', 'entangled_qft', 'tebd', 'mera']:
     m = d[k]['metrics']
     for ratio in ['0.05', '0.10', '0.15', '0.20']:
@@ -910,10 +961,10 @@ for k in ['qft', 'entangled_qft', 'tebd', 'mera']:
 
 Expected: no NaN, PSNR values in a believable range (20–30 dB), learned bases beat FFT. **If PSNR dropped more than a few dB relative to pre-rerun numbers, pause and investigate the schedule knobs before proceeding.**
 
-- [ ] **Step 4: Commit the new results inside the benchmarks submodule**
+- [ ] **Step 4: Commit the new results in the sibling clone**
 
 ```bash
-cd ParametricDFT-Benchmarks.jl
+cd /home/claude-user/ParametricDFT-Benchmarks.jl
 git add results/div2k_8q_generalized/
 git commit -m "results(div2k_8q_generalized): rerun with improved optimizer"
 ```
@@ -922,20 +973,20 @@ git commit -m "results(div2k_8q_generalized): rerun with improved optimizer"
 
 ## Task 12: Rerun frequency-space analysis on the new bases
 
-**Files:** overwrites `ParametricDFT-Benchmarks.jl/analysis/div2k_8q_generalized/*/summary.txt` and the consolidated `summary_all_images.txt`.
+**Files (sibling clone, `/home/claude-user/ParametricDFT-Benchmarks.jl`):** overwrites `analysis/div2k_8q_generalized/*/summary.txt` and the consolidated `summary_all_images.txt`.
 
 - [ ] **Step 1: Run the analysis script**
 
 ```bash
-cd ParametricDFT-Benchmarks.jl
+cd /home/claude-user/ParametricDFT-Benchmarks.jl
 julia --project=. analysis/analyze_frequency_space.jl generalized 2>&1 | tail -20
 ```
 
 - [ ] **Step 2: Inspect 0390 numbers for the new trained QFT**
 
 ```bash
-grep -E "^MEAN|0390.png" analysis/div2k_8q_generalized/summary_all_images.txt | head
-cat analysis/div2k_8q_generalized/0390/summary.txt
+grep -E "^MEAN|0390.png" /home/claude-user/ParametricDFT-Benchmarks.jl/analysis/div2k_8q_generalized/summary_all_images.txt | head
+cat /home/claude-user/ParametricDFT-Benchmarks.jl/analysis/div2k_8q_generalized/0390/summary.txt
 ```
 
 Record the new FFT / DCT / BDCT / QFT PSNR @ 20% keep on image 0390; these will drive the §5.3 bullet-number edits.
@@ -943,7 +994,7 @@ Record the new FFT / DCT / BDCT / QFT PSNR @ 20% keep on image 0390; these will 
 - [ ] **Step 3: Commit the regenerated analysis files**
 
 ```bash
-cd ParametricDFT-Benchmarks.jl
+cd /home/claude-user/ParametricDFT-Benchmarks.jl
 git add analysis/div2k_8q_generalized/
 git commit -m "analysis(div2k_8q_generalized): regenerate freqspace summaries for reruns"
 ```
@@ -1125,26 +1176,45 @@ Expected: clean build, no undefined-reference warnings.
 
 ---
 
-## Task 17: Bump submodule pointers in the paper repo
+## Task 17: Sync sibling clones → origin → submodules, bump pointers in the paper repo
 
-**Files:**
-- `/home/claude-user/parametric-dft-paper/` — the git index entries for `ParametricDFT.jl` and `ParametricDFT-Benchmarks.jl` submodules.
+Now we propagate the sibling-clone commits (Tasks 1-8 library, Tasks 9, 11, 12 benchmarks) into the paper's submodule checkouts via the shared `origin` remote.
 
-- [ ] **Step 1: Push the library-side commits to the submodule remotes**
+- [ ] **Step 1: Push the sibling library commits to `origin/main`**
+
+```bash
+cd /home/claude-user/ParametricDFT.jl
+git log --oneline origin/main..HEAD     # review commits to push
+git push origin HEAD:main
+```
+
+If the sibling was on the `optimizer-fixes` branch from Task 0, this creates / fast-forwards `main` on the remote to include the new commits.
+
+- [ ] **Step 2: Push the sibling benchmarks commits to `origin/main`**
+
+```bash
+cd /home/claude-user/ParametricDFT-Benchmarks.jl
+git log --oneline origin/main..HEAD     # review commits to push
+git push origin HEAD:main
+```
+
+- [ ] **Step 3: Pull the new commits into the paper's submodule checkouts**
 
 ```bash
 cd /home/claude-user/parametric-dft-paper/ParametricDFT.jl
-git log --oneline -10
-git push origin HEAD          # push the 8 library commits (Tasks 1-8)
+git fetch origin
+git checkout main 2>/dev/null || git checkout -B main origin/main
+git pull --ff-only origin main
 
-cd ../ParametricDFT-Benchmarks.jl
-git log --oneline -10
-git push origin HEAD          # push the config + results + analysis commits (Tasks 9, 11, 12)
+cd /home/claude-user/parametric-dft-paper/ParametricDFT-Benchmarks.jl
+git fetch origin
+git checkout main 2>/dev/null || git checkout -B main origin/main
+git pull --ff-only origin main
 ```
 
-If HEAD is detached (typical when working from the paper-side submodule checkout), `git push origin HEAD:main` or explicitly create and push a branch.
+Expected: both submodules are now at the new HEADs produced in Tasks 1-12.
 
-- [ ] **Step 2: Stage submodule pointer updates in the paper repo**
+- [ ] **Step 4: Stage the submodule pointer updates in the paper repo**
 
 ```bash
 cd /home/claude-user/parametric-dft-paper
@@ -1152,9 +1222,9 @@ git add ParametricDFT.jl ParametricDFT-Benchmarks.jl
 git status | head -20
 ```
 
-Expected: two submodule entries marked as modified, and various `tables/*.tex`, `figures/benchmarks/**/*.pdf`, `figures/diagrams/hadamard_freezing.pdf`, `main.tex`, and possibly `scripts/diagrams/hadamard_freezing.typ` as modified.
+Expected: two submodule entries marked as modified, plus the regenerated `tables/*.tex`, `figures/benchmarks/**/*.pdf`, `figures/diagrams/hadamard_freezing.pdf`, `main.tex` edits from Tasks 13-16, and possibly `scripts/diagrams/hadamard_freezing.typ`.
 
-- [ ] **Step 3: No commit yet — we make one commit in the next task.**
+- [ ] **Step 5: No commit yet — make one commit in the next task.**
 
 ---
 
@@ -1225,12 +1295,12 @@ git push origin master
 
 ## Task 19: File GitHub issue — expm retraction on U(2)
 
-**Files:** remote issue on `https://github.com/nzy1997/ParametricDFT.jl/issues`.
+**Files:** remote issue on `https://github.com/nzy1997/ParametricDFT.jl/issues`. Work from either clone — the `gh` CLI uses the current working directory's remote.
 
 - [ ] **Step 1: Verify gh CLI access to the ParametricDFT.jl remote**
 
 ```bash
-cd /home/claude-user/parametric-dft-paper/ParametricDFT.jl
+cd /home/claude-user/ParametricDFT.jl
 gh repo view 2>&1 | head -5
 ```
 
@@ -1287,7 +1357,7 @@ Record the issue URL printed by gh.
 - [ ] **Step 1: File the issue**
 
 ```bash
-cd /home/claude-user/parametric-dft-paper/ParametricDFT.jl
+cd /home/claude-user/ParametricDFT.jl
 gh issue create \
   --title "Higher-order parallel transport for Riemannian Adam on U(2)" \
   --label enhancement \
@@ -1344,7 +1414,7 @@ Record the issue URL. Update the reference in the expm-retraction issue body (`g
 - [ ] **Step 1: File the issue**
 
 ```bash
-cd /home/claude-user/parametric-dft-paper/ParametricDFT.jl
+cd /home/claude-user/ParametricDFT.jl
 gh issue create \
   --title "Soft top-k with temperature annealing (differentiable mask)" \
   --label enhancement \
