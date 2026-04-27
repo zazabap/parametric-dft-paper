@@ -4,3 +4,9 @@
 [submodule "ParametricDFT-Benchmarks.jl"]
 	path = ParametricDFT-Benchmarks.jl
 	url = https://github.com/zazabap/ParametricDFT-Benchmarks.jl.git
+[submodule "pdft"]
+	path = pdft
+	url = https://github.com/zazabap/pdft.git
+[submodule "pdft-benchmarks"]
+	path = pdft-benchmarks
+	url = https://github.com/zazabap/pdft-benchmarks.git
