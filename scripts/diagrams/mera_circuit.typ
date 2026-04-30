@@ -59,8 +59,6 @@
     content((-3.3, -ysep - i * dy), [$y_#(i + 1)$])
     content((xend + 0.5, -ysep - i * dy), [$y'_#(i + 1)$])
   }
-  // Dashed separator on the circuit
-  line((-3.5, -(n - 0.25) * dy), (xend, -(n - 0.25) * dy), stroke: (dash: "dashed", paint: gray))
   // Hadamard gates for all qubits
   for i in range(n) {
     ngate((-1.2, -i * dy), 1, "Hx" + str(i), text:[$H$], gap-y: dy, width: 0.45)
@@ -116,11 +114,4 @@
   // Layer 3
   meragate(x3d, -ysep - 1 * dy, -ysep - 5 * dy, [$D$], name: "yD7", gwidth: gw)
   meragate(x3w, -ysep, -ysep - 4 * dy, [$W$], name: "yW7", gwidth: gw)
-  // Layer labels
-  content((2.2, 1.2), text(8pt)[Layer 1])
-  content((6.3, 1.2), text(8pt)[Layer 2])
-  content((9.7, 1.2), text(8pt)[Layer 3])
-  line((0.2, 0.9), (4.2, 0.9), stroke: gray)
-  line((4.8, 0.9), (7.8, 0.9), stroke: gray)
-  line((8.3, 0.9), (11.2, 0.9), stroke: gray)
 }))
