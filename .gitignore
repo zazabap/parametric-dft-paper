@@ -13,3 +13,11 @@
 # Generated outputs (rebuilt by make)
 figures/benchmarks/
 tables/
+
+# Julia env (regenerated from scripts; not pinned for the paper)
+/Project.toml
+/Manifest.toml
+
+# Local scratch + agent logs
+/tmp/
+/docs/discussion/
