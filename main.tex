@@ -177,7 +177,7 @@ Using $D_n = \diag(1, \omega^{n/2}) \otimes \diag(1, \omega^{n/4}) \otimes \cdot
   \;=\; \prod_{j=1}^{k-1} \mathrm{CP}_{0,j}\bigl(M_j\bigr),
   \label{eq:cphase}
 \end{equation}
-with $M_j = \diag(1, 1, 1, e^{i\pi/2^{j-1}})$, where $\mathrm{CP}_{0,j}(M_j)$ applies $M_j$ to the qubit pair $(q_0, q_j)$ when both qubits are $\ket{1}$.
+with $M_j = \diag(1, 1, 1, e^{i\pi/2^{j-1}})$, where $\mathrm{CP}_{0,j}(M_j)$ applies $M_j$ to the qubit pair $(q_0, q_j)$.
 The conditional twiddle has become a chain of $k - 1$ two-qubit diagonal gates.
 
 \emph{Relax} (\cref{fig:cooley_tukey_to_qft}d). Recursing on $F_{n/2}$ replays the recursion-and-decomposition pair on the sub-register $(q_1, \ldots, q_{k-1})$, and so on down to $F_1 = H$ on the final qubit.
