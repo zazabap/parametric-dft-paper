@@ -10,9 +10,19 @@
 *.synctex.gz
 /main.pdf
 
-# Generated outputs (rebuilt by make)
-figures/benchmarks/
-tables/
+# Build outputs we don't ship (PNG previews, unused topology/mse renders)
+figures/benchmarks/**/*.png
+figures/benchmarks/topology/
+figures/benchmarks/mse/div2k_step_losses.pdf
+
+# Tables not currently inputted by main.tex (regen via `make tables`)
+tables/clic_mse.tex
+tables/div2k_0390.tex
+tables/div2k_8q.tex
+tables/freqspace_div2k_8q.tex
+tables/qft_gate_classification.tex
+tables/quickdraw_mse.tex
+tables/timing.tex
 
 # Julia env (regenerated from scripts; not pinned for the paper)
 /Project.toml
