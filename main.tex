@@ -55,11 +55,11 @@
 % ABSTRACT
 % ============================================================================
 \begin{abstract}
-The Discrete Fourier Transform (DFT) and Discrete Cosine Transform (DCT) are the default sparse bases for natural images, chosen long ago for mathematical tractability rather than proven optimality.
-We ask whether a compact parametric circuit, obtained by relaxing the Hadamard and controlled-phase gates of the Cooley--Tukey FFT into free elements of $U(2)$ and $U(1)^4$, can discover a sparser basis by end-to-end Riemannian optimization on the unitary manifold.
-On DIV2K natural images at $256 \times 256$, a block-wrapped variant of the learned circuit (Blocked RealRichBasis) beats full-image DCT by $+2.85$~dB PSNR at $20\%$ coefficient retention and essentially matches JPEG's $8 \times 8$ BlockDCT ($-0.3$~dB), showing that learned unitary bases can ride right up to the hand-designed reference once an explicit block prior is introduced.
-Inspecting the trained gate parameters gives a mechanistic reading: training spontaneously rediscovers block locality, the inductive bias hand-designed into JPEG, without any block prior in the loss.
-The framework is released as an open-source Julia library, \texttt{ParametricDFT.jl}.
+Image codecs from JPEG to HEVC project images onto fixed unitary bases---the DFT, the DCT, and their block-wise variants---chosen for mathematical tractability. The closed-form optimality results justifying these choices (KLT for Gaussian sources; the Ahmed--Jain DCT-to-KLT equivalence for AR(1) sources) hold only under restrictive source assumptions.
+We construct a continuous parametric family of unitary image bases by relaxing each gate of the Cooley--Tukey FFT into a free element of $U(2)$ or $U(1)^4$, and search it by Riemannian optimization with a straight-through estimator for top-$k$ truncation.
+The gain over fixed BlockDCT is predicted by source regime: on DIV2K natural images the learned basis closes the gap to JPEG's $8 \times 8$ BlockDCT to within $-0.3$~dB at $20\%$ retention and exceeds Block-PCA---the $L_2$-optimal linear basis under second-order statistics---by $+0.19$~dB; on Quick Draw line drawings, where the AR(1) assumption fails, the same family beats BlockDCT by $+5.7$~dB.
+Half of the Hadamard-role gates per dimension have collapsed to within $\sim\!1\%$ of Pauli matrices at convergence, factoring the trained transform into an effective $16 \times 16$-pixel block code without an explicit block prior in the loss.
+The framework is released as the open-source Julia library \texttt{ParametricDFT.jl}.
 \end{abstract}
 
 % ============================================================================
@@ -68,30 +68,26 @@ The framework is released as an open-source Julia library, \texttt{ParametricDFT
 \section{Introduction}
 \label{sec:introduction}
 
-Every major image codec, from JPEG~\cite{wallace1992jpeg} to HEVC~\cite{sullivan2012hevc}, is built on the same principle: project the image onto a fixed unitary basis, keep the largest coefficients, discard the rest~\cite{goyal2001transform, mallat2008wavelet}.
-Reconstruction quality is set almost entirely by how \emph{sparsely} the chosen basis represents natural images, which makes the basis the single most consequential design choice in the codec pipeline.
+Every major image codec, from JPEG~\cite{wallace1992jpeg} to HEVC~\cite{sullivan2012hevc}, projects images onto a fixed unitary basis, keeps the largest coefficients, and discards the rest~\cite{goyal2001transform, mallat2008wavelet}; the basis is the single most consequential design choice in the pipeline.
 In practice that choice has remained narrow: the Discrete Fourier Transform (DFT)~\cite{cooley1965fft}, the Discrete Cosine Transform (DCT)~\cite{ahmed1974dct}, and their block-wise variants have dominated every deployed image and video codec for decades.
 
-A parallel literature, originating far from image coding, has built up a very different language for describing linear transforms on high-dimensional arrays.
-Tensor networks were introduced as a compact description of quantum many-body states, with hierarchical constructions such as MERA~\cite{vidal2007mera} and time-evolution protocols such as TEBD~\cite{vidal2004tebd}, and have since been adopted as machine-learning models in their own right: matrix-product and tree-tensor networks have been used for supervised classification~\cite{stoudenmire2016supervised}, generative modeling~\cite{han2018unsupervised}, and the compression of high-dimensional arrays via tensor-train decomposition~\cite{oseledets2011tensor}, aided by differentiable contraction pipelines on GPU that have matured only recently~\cite{liu2021tropical, liu2023generic, OMEinsum}.
-Parameterized quantum circuits emerged in parallel as the workhorse of variational quantum algorithms~\cite{mcclean2016variational, cerezo2021variational} and quantum machine learning~\cite{schuld2019quantum, benedetti2019parameterized}, offering a disciplined way to search over unitary transforms, though with well-documented optimization challenges such as barren plateaus~\cite{mcclean2018barren, cerezo2021cost}.
-Images specifically have been studied through quantum representations such as FRQI~\cite{le2011frqi} and NEQR~\cite{zhang2013neqr}, which encode pixel intensities into the amplitudes of a quantum state, and through tensor-network simulation of the resulting circuits~\cite{markov2008simulating, luo2020yao}; these constructions treat the quantum circuit as a \emph{representation} of a fixed transform rather than as a space to be searched.
-The observation that closes this circle is that the DFT itself is famously a quantum circuit, the Quantum Fourier Transform, whose Hadamard and controlled-phase gates exactly implement the Cooley--Tukey butterfly.
-If the DFT is a quantum circuit, relaxing its gates into free unitaries turns the basis-selection problem into a search over a compact parametric circuit.
+A parallel literature describes linear transforms on high-dimensional arrays in a different language.
+Tensor networks were introduced as compact descriptions of quantum many-body states---hierarchical constructions such as MERA~\cite{vidal2007mera} and time-evolution protocols such as TEBD~\cite{vidal2004tebd}---and have since been adopted as machine-learning models for classification~\cite{stoudenmire2016supervised}, generative modeling~\cite{han2018unsupervised}, and array compression via tensor-train decomposition~\cite{oseledets2011tensor}, aided by differentiable contraction pipelines on GPU~\cite{liu2021tropical, liu2023generic, OMEinsum}.
+Parameterized quantum circuits emerged as the workhorse of variational quantum algorithms~\cite{mcclean2016variational, cerezo2021variational} and quantum machine learning~\cite{schuld2019quantum, benedetti2019parameterized}, offering a disciplined way to search over unitary transforms despite barren-plateau challenges~\cite{mcclean2018barren, cerezo2021cost}.
+The observation closing the circle is that the DFT itself is a quantum circuit, the Quantum Fourier Transform, whose Hadamard and controlled-phase gates exactly implement the Cooley--Tukey butterfly; relaxing those gates turns basis selection into a search over a compact parametric circuit.
 
-The reason this program has not already been carried out is twofold.
-On one side, no principled, low-dimensional, unitary basis search exists that strictly outperforms the DCT while remaining inspectable: modern end-to-end learned codecs~\cite{balle2017end} sidestep the question by discarding the fixed-basis picture entirely and absorbing everything into a convolutional autoencoder, and block-transform learning~\cite{pons2024rdlt} parametrizes the transform in unconstrained Euclidean space and fixes the block size, trading away the unitarity that underwrites the transform-coding guarantee.
-On the other side, a direct gradient-based search over unitary bases runs into two compounding obstacles: unitarity is a hard manifold constraint that a Euclidean gradient step immediately violates, which is precisely the setting in which Riemannian optimization on matrix manifolds~\cite{edelman1998geometry, absil2008optimization, boumal2023introduction, becigneul2019riemannian, kasai2019riemannian} and on the unitary group in particular~\cite{khaneja2005optimal, wen2013feasible} is the natural tool; and the top-$k$ coefficient selection that defines transform coding is non-differentiable, so gradients from the reconstruction loss do not reach the transform parameters through the obvious chain rule~\cite{bengio2013estimating}.
-Either obstacle alone is manageable; together they are why a naive Euclidean parametrization of a unitary, trained under the MSE reconstruction loss, typically fails to match even the full-image DCT.
+Two obstacles have kept this program from being carried out.
+End-to-end learned codecs~\cite{balle2017end, theis2017} sidestep the question by absorbing everything into a convolutional autoencoder; block-transform learning~\cite{pons2024rdlt} parametrizes in unconstrained Euclidean space and fixes the block size, trading away the unitarity that underwrites transform coding.
+A direct gradient search over unitary bases compounds the issue: unitarity is a hard manifold constraint requiring Riemannian optimization on matrix manifolds~\cite{edelman1998geometry, absil2008optimization, boumal2023introduction, becigneul2019riemannian, kasai2019riemannian, khaneja2005optimal, wen2013feasible}, and the top-$k$ coefficient selection that defines transform coding is non-differentiable~\cite{bengio2013estimating}.
 
-We resolve both obstacles by choosing the parametrization and the optimizer jointly.
-For the parametrization, we take the Cooley--Tukey FFT tensor network and relax each Hadamard gate into a free element of $U(2)$ and each controlled-phase into a free element of $U(1)^4$, giving a compact parametric circuit that contains the DFT as a single point, uses only $O(\log^2 N)$ parameters in the image side $N$, and is unitary by construction rather than by penalty.
-For the optimizer, we search its parameter manifold $U(2) \times U(1)^4$ with Riemannian Adam~\cite{kingma2015adam, becigneul2019riemannian} using Cayley retractions~\cite{wen2013feasible, li2020efficient} that preserve unitarity exactly at any step size and parallel transport of momentum between tangent spaces; top-$k$ non-differentiability is handled by a straight-through gradient estimator~\cite{bengio2013estimating}, and the whole pipeline runs as a batched einsum contraction under automatic differentiation~\cite{innes2018dont, OMEinsum, luo2020yao, liao2019differentiable}.
+We resolve both obstacles by choosing parametrization and optimizer jointly.
+Relaxing each Hadamard into a free element of $U(2)$ and each controlled-phase into $U(1)^4$ yields a circuit that is unitary by construction, has $O(\log^2 N)$ parameters in the image side $N$, and contains the DFT as a single point.
+The product manifold is searched with Riemannian Adam~\cite{kingma2015adam, becigneul2019riemannian} using Cayley retractions~\cite{wen2013feasible, li2020efficient} that preserve unitarity at any step size; top-$k$ non-differentiability is handled by a straight-through estimator~\cite{bengio2013estimating}, and the whole pipeline runs as a batched einsum contraction under automatic differentiation~\cite{innes2018dont, OMEinsum, luo2020yao, liao2019differentiable}.
 Four contributions follow.
-(i)~We show that the DFT and DCT are \emph{not} optimal sparse bases for natural images: a learned circuit in our framework strictly outperforms the full-image DCT at every retention rate we test on DIV2K~\cite{div2k} and Quick Draw~\cite{quickdraw}.
-(ii)~We give a gate-level mechanistic reading of the learned basis, showing that training spontaneously rediscovers block locality, the inductive bias JPEG hand-codes, without any block structure built into the loss.
-(iii)~Within the framework we compare four circuit topologies (separable QFT, an Entangled QFT with cross-dimensional coupling, TEBD-style ring connectivity~\cite{vidal2004tebd}, and a MERA-inspired hierarchical circuit~\cite{vidal2007mera}) and find a stable ranking that identifies cross-dimensional all-to-all coupling as the decisive inductive bias.
-(iv)~We release \texttt{ParametricDFT.jl}, an open-source Julia implementation combining tensor network contraction, Riemannian optimization, and differentiable programming.
+(i)~\textbf{Parametric family with classical bases as special points.} The relaxed-gate family contains the FFT, the full-image DCT, and BlockDCT as distinguished points on the unitary manifold; Riemannian optimization moves continuously between them.
+(ii)~\textbf{Source-regime-dependent gain over BlockDCT.} On DIV2K~\cite{div2k} natural images, where the Ahmed--Jain DCT-to-KLT asymptotic equivalence holds for AR(1)-like sources~\cite{ahmed1974dct, jain1979sinusoidal}, the learned basis closes the gap to BlockDCT to within $-0.3$~dB at $20\%$ retention; on Quick Draw~\cite{quickdraw} line drawings, where AR(1) fails, the same family beats BlockDCT by $+5.7$~dB.
+(iii)~\textbf{Beyond second-order optimality.} The learned basis exceeds Block-PCA---the $L_2$-optimal linear basis under second-order image statistics, suboptimal for transform coding outside the Gaussian regime~\cite{effros2004suboptimality}---by $+0.19$~dB on DIV2K and $+6.4$~dB on Quick Draw. Half of the Hadamard-role gates per dimension have collapsed to within $\sim\!1\%$ of Pauli matrices at convergence, factoring the trained transform into an effective $16 \times 16$-pixel block code without an explicit block prior.
+(iv)~\textbf{Open-source release.} \texttt{ParametricDFT.jl}, a Julia library combining tensor-network contraction, Riemannian optimization, and differentiable programming for unitary basis search.
 
 The rest of the paper proceeds as follows.
 \Cref{sec:background} derives the parametric circuit from the Cooley--Tukey FFT.
@@ -265,29 +261,18 @@ A second design axis, motivated directly by the block-DCT used in JPEG~\cite{wal
 \end{equation}
 where $\mathbf{x}_{[i,j]}$ is the $(i,j)$-th block.
 The wrapper is generic over the inner topology, so each of the four circuits in \cref{tab:circuits} has a blocked counterpart (Blocked QFT, Blocked Ent.\ QFT, Blocked TEBD, Blocked MERA).
-\Cref{fig:block_qft_circuit} shows the construction at the image level; \cref{fig:block_basis_circuits} sketches the inner-circuit variants used in the pdft-benchmarks harness (the standard QFT-style $H$~$+$~CP topology, RichBasis with $H + U(4)$ two-qubit gates, and RealRichBasis with $H + O(4)$).
+\Cref{fig:block_basis_circuits} sketches the inner-circuit variants used in the pdft-benchmarks harness (RealRichBasis with $H + O(4)$ as the headline learned basis, RichBasis with $H + U(4)$, and the Cooley--Tukey-derived Blocked QFT recovered when each two-qubit gate collapses to a controlled phase).
 
-\begin{figure*}[!tbp]
+\begin{figure}[!tbp]
 \centering
-\begin{subfigure}[t]{0.48\textwidth}
-\centering
-\includegraphics[width=\linewidth]{block_qft_circuit.pdf}
-\subcaption{Image-level construction: reshape into $b \times b$ blocks, apply the same parametric circuit $U(\boldsymbol{\theta})$ per block.}
-\label{fig:block_qft_circuit}
-\end{subfigure}\hfill
-\begin{subfigure}[t]{0.48\textwidth}
-\centering
-\includegraphics[width=0.92\linewidth]{block_basis_circuits.pdf}
-\subcaption{Inner-circuit variants for the $8 \times 8$ within-block transform ($m = 3$ qubits/dim), adapted from \texttt{pdft-benchmarks/diagrams/circuits.typ} with parameter counts under the $\dim U(2) = 4$ convention used in \cref{sec:gate_decomposition}. Top: RichBasis ($H + U^{(4)}$, $3 \times 4 + 3 \times 15 = 57$ real params/dim). Middle: RealRichBasis ($H + O^{(4)}$, $3 \times 1 + 3 \times 6 = 21$ real params/dim; real-orthogonal $H$ has no global phase to mod out). Bottom: Blocked QFT ($H + $ diagonal $M$, $3 \times 4 + 3 = 15$ real params/dim; recovered when each $U^{(4)}$ collapses to a controlled phase).}
+\includegraphics[width=\columnwidth]{block_basis_circuits.pdf}
+\caption{Block-wrapped parametric basis (\cref{sec:block_wrapper}) viewed as a hierarchy on the inner $b \times b$ within-block transform ($m = 3$ qubits/dim shown). Top: RealRichBasis ($H + O^{(4)}$, $21$ real params/dim) is the headline learned basis. Extending each two-qubit gate $O^{(4)} \to U^{(4)}$ recovers RichBasis ($57$ params/dim); collapsing $U^{(4)}$ to a diagonal controlled-phase $M$ recovers the Cooley--Tukey-derived Blocked QFT ($15$ params/dim). Setting $b$ to the image side reproduces the full-image circuits of \cref{tab:circuits}; setting $b = 8$ matches JPEG block-DCT.}
 \label{fig:block_basis_circuits}
-\end{subfigure}
-\caption{Block-wrapped parametric basis (\cref{sec:block_wrapper}). Setting $b$ to the image side recovers the full-image circuits of \cref{tab:circuits}; setting $b = 8$ matches JPEG block-DCT.}
-\label{fig:block_wrapper_combined}
-\end{figure*}
+\end{figure}
 
 The block size $b$ is the structural prior: $b = N$ recovers the full-image circuits already defined; $b = 8$ matches the JPEG block grid.
-The unblocked separable QFT, when trained on natural images, in fact \emph{discovers} a block structure on its own---several Hadamard-role gates collapse to near-Pauli matrices at convergence, freezing the corresponding qubits into classical block indices; this is shown in detail in \cref{sec:emergence}.
-The emergent block structure is one motivation for offering an explicit block prior as a complementary, hand-designed structural choice; the experiments in \cref{sec:topology_div2k,sec:blockprior_results} report results for both.
+The unblocked separable QFT, after training on natural images, exhibits a block-structured factorization---several Hadamard-role gates have collapsed to near-Pauli matrices at convergence, leaving the corresponding qubits acting as classical block indices; this is shown in detail in \cref{sec:emergence}.
+The block structure observed in the trained basic-variant motivates offering an explicit block prior as a complementary, hand-designed structural choice; the experiments in \cref{sec:topology_div2k,sec:blockprior_results} report results for both.
 
 % ============================================================================
 % TRAINING
@@ -451,7 +436,7 @@ Three effects are visible at 20\% keep (the column that matters most for practic
 \begin{enumerate}
   \item \emph{Data-adaptive orientation gives $+1.5$~dB.} Full-image DCT (30.85~dB) beats full-image FFT (29.39~dB) by $+1.5$~dB because its real-valued cosine basis aligns better with natural-image statistics than the DFT's complex basis, while the block size is the same.
   \item \emph{Block structure gives $+3.2$~dB.} BlockDCT at $8 \times 8$ (34.01~dB) beats full-image DCT by $+3.2$~dB; this is by far the largest single effect in the table, and it is driven entirely by the change in block size, not by a change in the basis within a block.
-  \item \emph{Basic-variant training matches DCT but does not beat it.} The best basic-variant learned circuit (TEBD/MERA at 31.28~dB) sits within $+0.4$~dB of full-image DCT and $-2.7$~dB below BlockDCT; without an explicit block prior, training discovers an effective block structure (\cref{sec:emergence}) but cannot close the BlockDCT gap on this dataset.
+  \item \emph{Basic-variant training matches DCT but does not beat it.} The best basic-variant learned circuit (TEBD/MERA at 31.28~dB) sits within $+0.4$~dB of full-image DCT and $-2.7$~dB below BlockDCT; without an explicit block prior, the trained basic-variant circuits exhibit an effective block structure (\cref{sec:emergence}) but cannot close the BlockDCT gap on this dataset.
   \item \emph{Block-wrapping closes most of the BlockDCT gap.} Wrapping the same circuits in an $8 \times 8$ block (\cref{sec:block_wrapper}) lifts the best learned PSNR to 33.70~dB (Blocked RealRichBasis), $-0.3$~dB below BlockDCT and $+2.85$~dB above full-image DCT---a learned blocked basis that essentially ties the JPEG-equivalent fixed transform.
 \end{enumerate}
 
@@ -496,7 +481,7 @@ The same ordering holds on SSIM at every keep ratio (e.g.\ at $20\%$: FFT 0.861 
 The spectra in \cref{fig:spectra} make the block-size axis visual: FFT energy sits at the center of the Fourier plane, full-image DCT energy is compacted into the top-left corner of a single $256 \times 256$ tile, BlockDCT tiles that same compaction into $32 \times 32 = 1024$ sharp $8 \times 8$ tiles, and the trained QFT tiles it into a visibly coarser, softer pattern, consistent with a $16 \times 16$-pixel effective block with soft boundaries.
 The kept-coefficient masks of \cref{fig:masks} confirm the same reading: FFT selects a low-frequency disk; full-image DCT a low-frequency corner; BlockDCT a low-frequency cluster inside each $8 \times 8$ tile; and the learned QFT a soft cluster on a visibly larger scale.
 The reconstructions in~\cref{fig:recon} translate the numerical PSNR/SSIM of~\cref{tab:div2k_repr} into visible image quality, with BlockDCT and the trained QFT producing the sharpest results at every keep ratio.
-The position the QFT occupies between DCT and BlockDCT is not accidental: \cref{sec:emergence} shows that the training has \emph{spontaneously} produced a block-structured transform, with a precise mechanical explanation in the trained QFT's gate parameters.\label{sec:freqspace}
+The position the QFT occupies between DCT and BlockDCT is not accidental: \cref{sec:emergence} shows that the training produced a block-structured transform, with the corresponding gate-level decomposition.\label{sec:freqspace}
 
 \FloatBarrier
 
@@ -504,7 +489,7 @@ The position the QFT occupies between DCT and BlockDCT is not accidental: \cref{
 \label{sec:emergence}
 
 The learned QFT on $256 \times 256$ DIV2K images discovers an effective $16 \times 16$ block structure: of the 16 Hadamard-role gates in the trained circuit (8 per dimension), 7 collapse to near-Pauli-$Z$ or near-Pauli-$X$ matrices during training.
-These ``frozen'' qubits act as classical block indices, factoring the transform into blocks of side $2^{4} = 16$ pixels on each axis.
+These ``frozen'' qubits act as classical block indices, factoring the transform into blocks of side $16$ pixels on each axis.
 
 Each $H$-role gate is a $2 \times 2$ unitary initialized as the Hadamard matrix $H = \frac{1}{\sqrt{2}}\begin{pmatrix}1 & 1 \\ 1 & -1\end{pmatrix}$ and optimized over $U(2)$.
 We classify a trained gate as
@@ -518,28 +503,31 @@ A proper Hadamard creates superposition across the $|0\rangle/|1\rangle$ states 
 A $Z$-like or $X$-like gate does \emph{not} create superposition: the computational-basis amplitudes are preserved (with possible sign or bit flips), and that qubit no longer participates in the DFT mixing.
 Consequently, every qubit whose Hadamard-role gate has frozen to $Z$-like or $X$-like behaves as a \emph{classical block index}, and the transform factors into blocks of size $2^{m_{\mathrm{free}}} \times 2^{n_{\mathrm{free}}}$ pixels, where $m_{\mathrm{free}}$ and $n_{\mathrm{free}}$ are the number of still-mixing qubits in each dimension.
 
-\begin{figure}[tbp]
-\centering
-\includegraphics[width=\columnwidth]{hadamard_freezing.pdf}
-\caption{Frozen-gate phenomenon on a 4-qubit parametric QFT (same topology as \cref{fig:cooley_tukey_to_qft}d). (a)~At initialization every Hadamard-role gate is $H$. (b)~After training, half of them (violet border) have collapsed to near-$Z$ and no longer mix the computational basis; the $M$ gates stay full $U(1)^4$. The actual trained basis on DIV2K $256 \times 256$ has $m = n = 8$ per dimension and shows the same pattern: 4 of 8 Hadamard-role gates freeze per dimension (3 near-$Z$ plus 1 near-$X$ in the column dim), yielding an effective $2^4 \times 2^4 = 16 \times 16$-pixel block transform. Gate labels are read directly from \texttt{load\_basis("trained\_qft.json")}.}
-\label{fig:hadamard_freezing}
-\end{figure}
+% Figure 7 (fig:hadamard_freezing) temporarily removed — schematic was confusing.
+% Source diagram preserved at scripts/diagrams/hadamard_freezing.typ and
+% rendered PDF at figures/diagrams/hadamard_freezing.pdf.
+% \begin{figure}[!tbp]
+% \centering
+% \includegraphics[width=\columnwidth]{hadamard_freezing.pdf}
+% \caption{Frozen-gate phenomenon on a 4-qubit parametric QFT (same topology as \cref{fig:cooley_tukey_to_qft}d). (a)~At initialization every Hadamard-role gate is $H$. (b)~After training, half of them (violet border) have collapsed to near-$Z$ and no longer mix the computational basis; the $M$ gates stay full $U(1)^4$. The actual trained basis on DIV2K $256 \times 256$ has $m = n = 8$ per dimension and shows the same pattern: 4 of 8 Hadamard-role gates freeze per dimension (3 near-$Z$ plus 1 near-$X$ in the column dim), yielding an effective $16 \times 16$-pixel block transform. Gate labels are read directly from \texttt{load\_basis("trained\_qft.json")}.}
+% \label{fig:hadamard_freezing}
+% \end{figure}
 
-\begin{table}[tbp]
+\begin{table}[!tbp]
 \centering
 \caption{Gate-type summary per dimension for the trained QFT on DIV2K ($256 \times 256$). The trained transform acts as an effective $16 \times 16$ block transform.}
 \label{tab:gate_summary}
 \resizebox{0.7\columnwidth}{!}{\input{tables/qft_gate_summary}}
 \end{table}
 
-\Cref{fig:hadamard_freezing} shows the freezing pattern schematically and \cref{tab:gate_summary} summarizes the trained gate types.
+\Cref{tab:gate_summary} summarizes the trained gate types.
 In both dimensions, qubits 0--3 retain their Hadamard role and qubits 4--7 freeze to $Z$-like (with a single $X$-like in the column dimension).
 The freezing is \emph{not} a smooth decay: the off-diagonal magnitudes of the frozen gates sit at the $\sim\!1\%$ level, essentially quantized to the $Z$-like or $X$-like endpoints.
 Meanwhile all 56 controlled-phase gates retain their full $U(1)^4$ parameterization (none have collapsed to the identity), so the \emph{intra-block} transform remains rich.
 
 This produces a clean mechanical reading of the block-size axis in~\cref{tab:div2k_repr}:
 BlockDCT sits at block size $2^{3} = 8$ by hand design (each dimension has 3 frozen bits by construction);
-the trained QFT sits at block size $2^{4} = 16$ because training has frozen 4 bits per dimension;
+the trained QFT sits at block size $16$ on each dimension because 4 of the 8 mixing qubits have frozen to classical block indices;
 full-image DCT sits at block size $2^{8} = 256$ (no frozen bits).
 The remaining $\sim\!1.5$~dB gap between BlockDCT and QFT is the performance cost of the QFT's \emph{larger, softer} block: its block side is twice that of JPEG's and its boundaries are not sharp.
 
@@ -563,15 +551,17 @@ Future work that removes the block assumption---for example by adapting the froz
 \subsection{Adding an explicit block prior}
 \label{sec:blockprior_results}
 
-The implicit block discovery of \cref{sec:emergence} suggests a complementary experiment: rather than letting training \emph{find} a block size, we wrap each circuit in an explicit $b \times b$ partition (\cref{eq:block_wrapper}) and train the inner topology directly.
-\Cref{fig:variations_rd} contrasts the unblocked topologies (solid) against their explicitly blocked counterparts (dashed) at $b = 16$, with BlockDCT~$8 \times 8$ as the upper reference.
+The block factorization observed in \cref{sec:emergence} suggests a complementary experiment: rather than relying on the trained basic-variant to land at an effective block size, we wrap each circuit in an explicit $b \times b$ partition (\cref{eq:block_wrapper}) and train the inner topology directly.
+\Cref{tab:div2k_repr} contrasts the unblocked topologies against their explicitly blocked counterparts at $b = 16$, with BlockDCT~$8 \times 8$ as the upper reference.
 
-\begin{figure}[!tbp]
-\centering
-\includegraphics[width=\columnwidth]{variations/variations_rd.pdf}
-\caption{Rate--distortion (PSNR vs.\ keep ratio) on DIV2K $256 \times 256$. Solid: unblocked topologies of \cref{tab:circuits}; dashed: their $16 \times 16$ block-wrapped counterparts (\cref{eq:block_wrapper}); dotted: a richer blocked basis with extra parametric layers and a real-valued variant. BlockDCT~$8 \times 8$ and full-image DCT are shown as classical references. Adding the explicit block prior lifts each circuit by ${\sim}0.7$--$1$~dB at 20\% keep, recovering most of the gap to BlockDCT.}
-\label{fig:variations_rd}
-\end{figure}
+% Figure (fig:variations_rd) removed as redundant with tab:div2k_repr. The PDF is
+% preserved at figures/benchmarks/variations/variations_rd.pdf for reuse if needed.
+% \begin{figure}[!tbp]
+% \centering
+% \includegraphics[width=\columnwidth]{variations/variations_rd.pdf}
+% \caption{Rate--distortion (PSNR vs.\ keep ratio) on DIV2K $256 \times 256$. Solid: unblocked topologies of \cref{tab:circuits}; dashed: their $16 \times 16$ block-wrapped counterparts (\cref{eq:block_wrapper}); dotted: a richer blocked basis with extra parametric layers and a real-valued variant. BlockDCT~$8 \times 8$ and full-image DCT are shown as classical references. Adding the explicit block prior lifts each circuit by ${\sim}0.7$--$1$~dB at 20\% keep, recovering most of the gap to BlockDCT.}
+% \label{fig:variations_rd}
+% \end{figure}
 
 Three observations follow.
 First, wrapping any of the unblocked topologies in a $16 \times 16$ block lifts its 20\%-keep PSNR by ${\sim}0.7$--$1$~dB, closing most of the gap to BlockDCT~$8 \times 8$ without changing the inner circuit.
@@ -583,7 +573,7 @@ Third, a denser ``rich'' blocked basis edges past BlockDCT~$8 \times 8$ at 20\% 
 \subsection{Training dynamics}
 \label{sec:training_dynamics}
 
-\begin{figure}[htbp]
+\begin{figure}[!tbp]
 \centering
 \includegraphics[width=0.9\columnwidth]{mse/div2k_training_curves.pdf}
 \caption{Training convergence on DIV2K ($256 \times 256$, 8 qubits, MSE loss; \texttt{pdft} harness). Per-epoch train (solid) and validation (dashed) loss for the four topologies. The Entangled QFT converges fastest, the separable QFT and MERA follow, and TEBD's validation loss sitting at or below its training loss reflects underfitting from its ring connectivity.}
@@ -601,67 +591,52 @@ The Entangled QFT's faster convergence---despite carrying only $n$ extra paramet
 \section{Discussion}
 \label{sec:discussion}
 
-The striking feature of~\cref{tab:div2k_repr} is not that any individual learned circuit beats FFT or DCT---the basic-variant circuits essentially tie full-image DCT---but rather that the dominant performance variable is \emph{block size}, not basis.
-Moving from a full-image Fourier basis to a full-image cosine basis gains $\sim\!1.5$~dB at 20\% keep; moving from a full-image cosine basis to an $8 \times 8$ block-wise cosine basis gains another $\sim\!3.2$~dB.
-This is consistent with decades of block-transform coding experience in image and video compression~\cite{wallace1992jpeg}: block-locality is a strong image-statistics prior, and coefficient selection benefits enormously from being confined to local tiles.
-Our contribution is to place parametric quantum circuits on the same axis: the basic-variant QFT manifold, when trained, leaves the full-image endpoint and discovers an intermediate point at effective block size $2^4 = 16$ pixels (\cref{sec:emergence}); explicitly wrapping the same circuit in an $8 \times 8$ block prior (\cref{sec:block_wrapper}) lifts the best learned PSNR to within $-0.3$~dB of BlockDCT.
+The dominant performance variable in \cref{tab:div2k_repr} is block size, not basis.
+Moving from a full-image Fourier basis to a full-image cosine basis gains $\sim\!1.5$~dB at $20\%$ keep; moving from full-image DCT to $8 \times 8$ block-DCT gains another $\sim\!3.2$~dB.
+The trained basic-variant QFT, in our experiments, lands at an intermediate point at effective block size $16$ pixels (\cref{sec:emergence}); explicitly wrapping the same circuit in an $8 \times 8$ block prior closes the gap to BlockDCT to within $-0.3$~dB.
+This is consistent with decades of block-transform coding experience~\cite{wallace1992jpeg, britanak2007}: block-locality is a strong image-statistics prior, and coefficient selection benefits from being confined to local tiles.
 
-The structural analysis in~\cref{sec:emergence} makes the block-emergence concrete: 7 of the 16 Hadamard-role gates in the trained QFT collapse to near-Pauli matrices, and the collapse is quantized rather than smooth.
-The remaining Hadamards and all 56 controlled-phase gates carry rich parameterization, so the intra-block transform is fully exploited; the transform's block structure comes entirely from the frozen Hadamards.
-A clean way to read this is that training has performed an implicit model selection on the block-size axis: starting from the full-image DFT (no frozen Hadamards) and optimizing under the MSE reconstruction objective, gradient descent has moved the solution to a point at which some fraction of the mixing qubits have become classical block indices.
-That the stopping point is 4 frozen bits per dimension---corresponding to JPEG-$2 \times$---rather than 3 (JPEG-equivalent) or 5 (MPEG-equivalent), is a property of natural-image statistics as seen through the DIV2K training distribution.
+Two factors account for the residual $\sim\!3$~dB gap between the unblocked QFT and BlockDCT.
+The trained QFT's effective block is twice JPEG's, so its per-block coefficient budget is four times larger and intra-block compaction is correspondingly weaker; and its block boundaries are soft---off-diagonal magnitudes of the frozen Hadamards sit at $\sim\!1\%$ rather than zero, so a small amount of cross-block mixing remains.
+The block-wrapped variants close both: the wrapper enforces exact boundaries, $b = 8$ matches the JPEG grid, and combined with the richer per-gate manifold of RichBasis the learned basis comes within $-0.3$~dB of BlockDCT.
 
-Two factors account for the residual $\sim\!3$~dB gap that the unblocked QFT shows against BlockDCT.
-First, its effective block is twice as large as JPEG's ($16 \times 16$ vs $8 \times 8$), so the coefficient budget per block is four times larger and intra-block compaction is correspondingly weaker.
-Second, the unblocked QFT's block boundaries are \emph{soft}: the off-diagonal magnitudes of the frozen Hadamards sit at the $\sim\!1\%$ level rather than zero, so a small amount of cross-block mixing remains.
-The block-wrapped variants of \cref{sec:block_wrapper} close both: the wrapper makes the boundary exact, and a hand-chosen $b = 8$ matches the JPEG grid; combined with the richer per-gate manifold of RichBasis, this brings the learned basis to within $-0.3$~dB of BlockDCT.
+The four learned topologies of \cref{tab:circuits} sit within $\sim\!1$~dB of one another; the spread between Entangled QFT, TEBD, and MERA is $\leq 0.05$~dB.
+The choice of topology among reasonable variants thus contributes weakly compared to the block-size axis.
+Combining cross-dimensional coupling with an explicit block prior---making block size a learnable structural parameter rather than an emergent byproduct---is the natural follow-up.
 
-The topology ranking in~\cref{tab:div2k_repr}---the four learned circuits sitting within $\sim 1$~dB of one another---is best read as a ranking \emph{within} the full-image unitary family.
-The Entangled QFT's $n$ cross-dimensional phases outperform TEBD's $2n$ ring-topology phases because they connect degrees of freedom that are relevant to the 2D structure of images; TEBD's local ring connectivity is simply the wrong inductive bias for natural images.
-The MERA-inspired basis, with hierarchical multi-scale connectivity, lies between these two.
-All of this is orthogonal to the block-size axis: the Entangled QFT can be composed with a block structure, and the resulting basis would inherit both advantages.
-Building and training such an architecture is the most natural next step.
+Although we evaluate circuits classically, the parametric QFT structure maps directly to quantum hardware: the Entangled QFT requires only $n$ additional CPHASE gates beyond the standard QFT~\cite{luo2020yao, markov2008simulating}.
+The collapse of trained Hadamards to Pauli-like gates suggests a compilation benefit: on real hardware, frozen qubits could be replaced by their discrete Pauli equivalents, removing parameters and gate noise from those sites.
+The framework is released as the open-source Julia library \texttt{ParametricDFT.jl} at \url{https://github.com/nzy1997/ParametricDFT.jl}.
 
-Although we evaluate circuits classically as tensor networks, the parametric QFT structure maps directly to quantum hardware: implementing the Entangled QFT requires only $n$ additional CPHASE gates beyond the standard QFT circuit~\cite{luo2020yao, markov2008simulating}.
-The structural finding that trained Hadamards collapse to Pauli-like gates suggests a \emph{compilation} benefit: on real quantum hardware, the frozen qubits could be replaced by their discrete Pauli equivalents, removing parameters and gate noise from those sites entirely.
-On the classical side, the framework is released as an open-source Julia library, \texttt{ParametricDFT.jl}, at \url{https://github.com/nzy1997/ParametricDFT.jl}.
-
-The whole-frame counterexample (\cref{sec:per_image}) is an honest counterweight: on images whose dominant correlations span the whole frame, all block-structured priors---hand-designed or learned---underperform full-image transforms.
-Our QFT inherits BlockDCT's weakness by construction, since its learned prior \emph{is} a block prior.
-Ablation studies isolating the contribution of Riemannian vs.\ projected Euclidean optimization, comparison against wavelets and learned dictionaries, and an explicit per-image adaptive block-selection mechanism are all natural follow-up directions.
+A whole-frame counterexample (\cref{sec:per_image}) bounds the result: on images whose dominant correlations span the whole frame, all block-structured priors---hand-designed or learned---underperform full-image transforms.
+The QFT inherits BlockDCT's weakness by construction.
+Comparison against wavelets and learned dictionaries, and an explicit per-image adaptive block-selection mechanism, are natural follow-up directions.
 
 % ============================================================================
 % CONCLUSION
 % ============================================================================
 \section{Conclusion}
 
-We have introduced a continuous family of parametric quantum circuit bases for image compression, obtained by relaxing the Cooley--Tukey FFT's Hadamard and controlled-phase gates into learnable elements of $U(2)$ and $U(1)^4$ and optimizing the result on the Riemannian manifold of unitaries.
-The family places the DFT at one endpoint of a block-size axis and permits gradient-based training to move the basis along that axis.
+We have introduced a continuous parametric family of unitary image bases, obtained by relaxing the Hadamard and controlled-phase gates of the Cooley--Tukey FFT into free elements of $U(2)$ and $U(1)^4$ and optimizing on the Riemannian manifold of unitaries.
+The family contains the FFT, full-image DCT, and BlockDCT as distinguished points; gradient-based training moves the basis continuously between them.
 
-On DIV2K at $256 \times 256$ resolution, the basic-variant trained QFT essentially ties full-image DCT at 20\% compression (30.91 vs.\ 30.85 dB) and falls ${\sim}3.1$~dB behind $8 \times 8$ BlockDCT; wrapping the same circuit in an explicit $8 \times 8$ block grid (Blocked RealRichBasis) lifts it to within $-0.3$~dB of BlockDCT.
-Inspecting the trained gate parameters explains this intermediate position: 7 of the 16 Hadamard-role gates collapse to near-Pauli matrices during training, freezing 4 of the 8 qubits per dimension into classical block indices and factoring the transform into blocks of side $2^{4} = 16$ pixels.
-The learned transform has spontaneously performed an implicit model selection on the block-size axis, landing at twice JPEG's block size rather than at the full image.
-
-Within the full-image unitary family we confirm a stable topology ranking: Entangled QFT beats the separable QFT, which beats the MERA-inspired basis, which beats TEBD.
-Combining the cross-dimensional coupling of the Entangled QFT with an explicit block prior, so that block size is a learnable structural parameter rather than an emergent byproduct, is the natural next step.
-
-The framework unifies tensor network contraction, Riemannian optimization, and differentiable programming into a single pipeline.
-New circuit topologies can be defined by specifying a connectivity pattern; the manifold optimization, batched einsum evaluation, and differentiable truncation machinery apply unchanged.
+The gain over fixed BlockDCT is predicted by source regime.
+On DIV2K natural images, where the Ahmed--Jain DCT-to-KLT asymptotic equivalence holds, the learned basis closes the gap to JPEG's $8 \times 8$ BlockDCT to within $-0.3$~dB at $20\%$ retention and exceeds Block-PCA---the $L_2$-optimal linear basis under second-order statistics---by $+0.19$~dB.
+On Quick Draw line drawings, where the AR(1) assumption fails, the same family beats BlockDCT by $+5.7$~dB.
+Inspecting the trained gates of the basic-variant QFT shows the underlying structure: half of the Hadamard-role gates per dimension have collapsed to within $\sim\!1\%$ of Pauli matrices at convergence, factoring the trained transform into an effective $16 \times 16$-pixel block code without an explicit block prior.
 
 \paragraph{Beyond natural images.}
-Although our experiments target DIV2K, the framework's only structural assumption is that signals admit a sparse representation in some unitary basis---a setting in which a fixed FFT or DCT is currently the standard tool.
-Three application domains stand out as natural next targets.
-\emph{Medical imaging} relies on JPEG/JPEG-2000 for archive compression of CT, MRI, and OCT slices, and on fixed Fourier sensing matrices for compressed-sensing MRI~\cite{lustig2007sparse}; replacing the fixed transform with one trained per anatomical site gives a basis whose effective block size matches the structural scale of the modality, and exposes the sensing matrix itself to gradient-based co-design with the reconstructor.
-\emph{Hyperspectral satellite imagery} is dominated by spatial--spectral block-DCT codecs~\cite{rusyn2016hyperspectral} that ignore the strong spectral correlations a learned per-band unitary can capture.
-\emph{Audio coding} is built around the modified DCT (MDCT) at the heart of MP3, AAC, and Opus~\cite{princen1986mdct}; the parametric circuit family extends naturally to 1D and gives the same continuous interpolation between full-signal Fourier and block-local detection windows that proved decisive on images.
-In all three settings, the existing hand-designed transform serves as a strong baseline with a published evaluation protocol, so the methodology of this paper transfers directly.
-The release of \texttt{ParametricDFT.jl} as an open-source library is intended to make these extensions straightforward.
+The framework's only structural assumption is that signals admit a sparse representation in some unitary basis---a setting where a fixed FFT or DCT is currently the standard tool.
+\emph{Medical imaging} relies on JPEG/JPEG-2000 for archive compression and on fixed Fourier sensing matrices for compressed-sensing MRI~\cite{lustig2007sparse}; replacing the fixed transform with one trained per anatomical site exposes the sensing matrix to gradient-based co-design with the reconstructor.
+\emph{Hyperspectral satellite imagery} uses spatial--spectral block-DCT codecs~\cite{rusyn2016hyperspectral} that ignore strong spectral correlations a learned per-band unitary can capture.
+\emph{Audio coding} is built around the modified DCT~\cite{princen1986mdct}; the parametric family extends naturally to 1D, providing the same continuous interpolation between full-signal and block-local windows that proved decisive on images.
+In each case the existing transform serves as a strong baseline with a published evaluation protocol, so the methodology transfers directly.
 
 % ============================================================================
 % ACKNOWLEDGMENTS
 % ============================================================================
 \begin{acknowledgments}
-% TODO: Add acknowledgments.
+This work was supported by JST SPRING, Japan, Grant Number JPMJSP2180. The author thanks the Institute of Science Tokyo for the▎research environment and the supervisors for their valuable guidance.
 \end{acknowledgments}
 
 % ============================================================================
@@ -792,7 +767,7 @@ MERA's purpose in our comparison is to test whether \emph{multi-scale} connectiv
 \section{Basis variations}
 \label{app:basis_variations}
 
-\Cref{sec:blockprior_results} reports the headline rate--distortion comparison between unblocked and block-wrapped topologies (\cref{fig:variations_rd}).
+\Cref{sec:blockprior_results} reports the headline rate--distortion comparison between unblocked and block-wrapped topologies (\cref{tab:div2k_repr}).
 This appendix sweeps three additional axes that the main text condenses: block side, parameter density, and image resolution.
 All numbers are mean PSNR (dB) over the 50-image DIV2K test slice with the per-image-trained pairing used in the main text; runs use the \texttt{pdft-benchmarks} \texttt{generalized} preset (60 epochs, 500 training images, Adam, peak LR $3{\times}10^{-3}$, early-stopping patience 5) unless otherwise noted.
 

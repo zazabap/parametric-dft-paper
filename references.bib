@@ -18,6 +18,16 @@
   year={1974}
 }
 
+@article{jain1979sinusoidal,
+  title={A sinusoidal family of unitary transforms},
+  author={Jain, Anil K},
+  journal={IEEE Transactions on Pattern Analysis and Machine Intelligence},
+  volume={1},
+  number={4},
+  pages={356--365},
+  year={1979}
+}
+
 @article{vidal2004tebd,
   title={Efficient simulation of one-dimensional quantum many-body systems},
   author={Vidal, Guifr{\'e}},
@@ -130,16 +140,6 @@
   publisher={Princeton University Press}
 }
 
-@article{donoho2006compressed,
-  title={Compressed sensing},
-  author={Donoho, David L},
-  journal={IEEE Transactions on Information Theory},
-  volume={52},
-  number={4},
-  pages={1289--1306},
-  year={2006}
-}
-
 @misc{quickdraw,
   title={Quick, Draw! Dataset},
   author={Google},
@@ -224,13 +224,6 @@
   year={2012}
 }
 
-@article{malvar1992lapped,
-  title={Signal processing with lapped transforms},
-  author={Malvar, Henrique S.},
-  journal={Artech House},
-  year={1992}
-}
-
 @inproceedings{balle2017end,
   title={End-to-end optimized image compression},
   author={Ball{\'e}, Johannes and Laparra, Valero and Simoncelli, Eero P.},
@@ -261,26 +254,6 @@
   number={5},
   pages={9--21},
   year={2001}
-}
-
-@article{le2011frqi,
-  title={A flexible representation of quantum images for polynomial preparation, image compression, and processing operations},
-  author={Le, Phuc Q. and Dong, Fangyan and Hirota, Kaoru},
-  journal={Quantum Information Processing},
-  volume={10},
-  number={1},
-  pages={63--84},
-  year={2011}
-}
-
-@article{zhang2013neqr,
-  title={NEQR: a novel enhanced quantum representation of digital images},
-  author={Zhang, Yi and Lu, Kai and Gao, Yinghui and Wang, Mo},
-  journal={Quantum Information Processing},
-  volume={12},
-  number={8},
-  pages={2833--2860},
-  year={2013}
 }
 
 @article{edelman1998geometry,
@@ -457,3 +430,39 @@
   pages={1153--1161},
   year={1986}
 }
+
+% ===========================================================================
+% Imported from pdft-benchmarks/docs/theory/refs.bib (2026-04-30)
+% Duplicates with existing keys (ahmed1974, jain1979, goyal2001, balle2017,
+% vidal2007, stoudenmire2016, mallat1999) are intentionally omitted.
+% ===========================================================================
+
+% Information-theoretic foundations
+% KLT / DCT classical results
+@article{effros2004suboptimality,
+  author  = {Effros, Michelle and Feng, Hanying and Zeger, Kenneth},
+  title   = {Suboptimality of the {Karhunen}--{Lo\`{e}ve} transform for transform coding},
+  journal = {IEEE Transactions on Information Theory},
+  volume  = {50},
+  number  = {8},
+  pages   = {1605--1619},
+  year    = {2004}
+}
+
+@book{britanak2007,
+  author    = {Britanak, Vladimir and Yip, Patrick C. and Rao, K. R.},
+  title     = {Discrete Cosine and Sine Transforms: General Properties, Fast Algorithms and Integer Approximations},
+  publisher = {Academic Press},
+  year      = {2007}
+}
+
+% Sparsity / k-term approximation
+% Learned image compression
+@inproceedings{theis2017,
+  author    = {Theis, Lucas and Shi, Wenzhe and Cunningham, Andrew and Husz\'{a}r, Ferenc},
+  title     = {Lossy image compression with compressive autoencoders},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2017}
+}
+
+% Tensor networks / quantum-inspired ML
