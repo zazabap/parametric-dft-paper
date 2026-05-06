@@ -28,6 +28,7 @@ benchmarks:
 	bash scripts/copy_benchmarks.sh
 	julia scripts/generate_cumulative_energy_0390.jl
 	julia scripts/generate_extra_spectra_0390.jl
+	/opt/conda/envs/pdft/bin/python scripts/plot_ar1_histogram.py
 
 update:
 	git submodule update --remote
