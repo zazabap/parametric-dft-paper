@@ -1,0 +1,36 @@
+\begin{tabular}{@{}c@{\hspace{1.5em}}c@{}}
+\begin{tabular}[t]{@{}lcccc@{}}
+\toprule
+\textbf{Unblocked (full $256 \times 256$)} & $\rho{=}0.05$ & $\rho{=}0.10$ & $\rho{=}0.15$ & $\rho{=}0.20$ \\
+\midrule
+\rowcolor[HTML]{EBEBEB}
+\multicolumn{5}{@{}l}{\textit{Trained PDFT bases (this work)}} \\
+\textbf{QFT}              & 24.91 & 27.30 & 29.20 & 30.91 \\
+\textbf{Entangled QFT}    & 25.07 & 27.53 & 29.48 & 31.23 \\
+\textbf{TEBD}             & \textbf{25.09} & \textbf{27.56} & \textbf{29.52} & \textbf{31.28} \\
+\textbf{MERA}             & \textbf{25.09} & \textbf{27.56} & \textbf{29.52} & \textbf{31.28} \\
+\rowcolor[HTML]{EBEBEB}
+\multicolumn{5}{@{}l}{\textit{Classical}} \\
+FFT                       & 24.50 & 26.54 & 28.07 & 29.39 \\
+DCT                       & \textbf{25.36} & \textbf{27.61} & \textbf{29.33} & \textbf{30.85} \\
+\bottomrule
+\end{tabular}
+&
+\begin{tabular}[t]{@{}lcccc@{}}
+\toprule
+\textbf{$8 \times 8$ block-wrapped} & $\rho{=}0.05$ & $\rho{=}0.10$ & $\rho{=}0.15$ & $\rho{=}0.20$ \\
+\midrule
+\rowcolor[HTML]{DDE8F7}
+\multicolumn{5}{@{}l}{\textit{Trained PDFT bases (this work)}} \\
+\textbf{Blocked QFT}           & 25.18 & 28.09 & 30.30 & 32.26 \\
+\textbf{Blocked RichBasis}     & \textbf{25.97} & 29.16 & 31.55 & 33.65 \\
+\rowcolor[HTML]{FFE5E5}
+\textcolor{red}{\textbf{Blocked RealRichBasis}} & \textcolor{red}{\textbf{25.97}} & \textcolor{red}{\textbf{29.18}} & \textcolor{red}{\textbf{31.59}} & \textcolor{red}{\textbf{33.70}} \\
+\rowcolor[HTML]{DDE8F7}
+\multicolumn{5}{@{}l}{\textit{Classical}} \\
+BlockDCT                       & \textbf{26.11} & \textbf{29.41} & \textbf{31.86} & \textbf{34.01} \\
+Block-PCA                      & 25.93 & 29.05 & 31.42 & 33.51 \\
+\bottomrule
+\end{tabular}
+\\
+\end{tabular}

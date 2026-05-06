@@ -12,6 +12,7 @@
 \usepackage{braket}
 \usepackage{multirow}
 \usepackage{xcolor}
+\usepackage{colortbl}
 \usepackage{placeins}  % \FloatBarrier
 \usepackage{subcaption}
 \graphicspath{{figures/diagrams/}{figures/benchmarks/}}
@@ -108,7 +109,7 @@ The rest of the paper proceeds as follows.
 
 This section derives the parametric circuit that the rest of the paper trains.
 Starting from the Cooley--Tukey FFT, we apply four local transformations to the underlying tensor network---\emph{re-index}, \emph{recurse}, \emph{decompose}, and \emph{relax}---ending with a circuit whose gates are free elements of the unitary manifold.
-The construction is implemented in the open-source Julia library \texttt{ParametricDFT.jl}, whose \texttt{note/main.typ} gives the same derivation in executable form; \cref{fig:cooley_tukey_to_qft} shows the four transformations side by side for a $k = 4$-qubit ($N = 16$) example.
+The construction is implemented in the open-source Julia library \texttt{ParametricDFT.jl}, which also provides an executable derivation; \cref{fig:cooley_tukey_to_qft} shows the four transformations side by side for a $k = 4$-qubit ($N = 16$) example.
 
 \subsection{Cooley--Tukey decomposition}
 
@@ -260,7 +261,7 @@ A second design axis, motivated directly by the block-DCT used in JPEG~\cite{wal
 \end{equation}
 where $\mathbf{x}_{[i,j]}$ is the $(i,j)$-th block.
 The wrapper is generic over the inner topology, so each of the four circuits in \cref{tab:circuits} has a blocked counterpart (Blocked QFT, Blocked Ent.\ QFT, Blocked TEBD, Blocked MERA).
-\Cref{fig:block_basis_circuits} sketches the inner-circuit variants used in the pdft-benchmarks harness (RealRichBasis with $H + O(4)$ as the headline learned basis, RichBasis with $H + U(4)$, and the Cooley--Tukey-derived Blocked QFT recovered when each two-qubit gate collapses to a controlled phase).
+\Cref{fig:block_basis_circuits} sketches the inner-circuit variants we evaluate (RealRichBasis with $H + O(4)$ as the headline learned basis, RichBasis with $H + U(4)$, and the Cooley--Tukey-derived Blocked QFT recovered when each two-qubit gate collapses to a controlled phase).
 
 \begin{figure}[!tbp]
 \centering
@@ -393,7 +394,7 @@ We evaluate on two datasets:
 All learned bases are trained using Riemannian gradient descent with Armijo line search ($\alpha_0 = 0.01$, $c = 10^{-4}$, $\tau = 0.5$, at most 10 backtracking steps), under the MSE reconstruction loss $\LL_{\text{MSE}}$ (\cref{eq:mse_loss}) with $k = 10\%$ coefficients retained during training.
 We use a 20\% validation split, early stopping with patience 2 epochs, and random seed 42 throughout.
 
-We report PSNR (peak signal-to-noise ratio, $10 \log_{10}(1/\text{MSE})$) and SSIM (structural similarity) at compression ratios $k/N \in \{5\%, 10\%, 15\%, 20\%\}$, averaged over the evaluation set.
+We report PSNR (peak signal-to-noise ratio, $10 \log_{10}(1/\text{MSE})$) at compression ratios $k/N \in \{5\%, 10\%, 15\%, 20\%\}$, averaged over the evaluation set.
 
 We compare against three fixed classical transforms at different positions on the \emph{block-size axis}:
 \begin{itemize}
@@ -411,9 +412,16 @@ This experiment ranks topologies within the full-image (block size $=$ 256) unit
 
 \begin{table*}[!tbp]
 \centering
-\caption{Mean PSNR (dB) / SSIM across two datasets: the 100-image Quick Draw test slice at $32 \times 32$ (5 qubits/dim) and the 100-image DIV2K test slice at $256 \times 256$ (8 qubits/dim), both with MSE loss. Numbers from \texttt{pdft-benchmarks/results/published/} (pdft v0.2.1). MERA requires $m + n$ to be a power of 2 and is therefore omitted at Quick Draw ($m+n = 10$). Best result in each learned subgroup at the $20\%$-keep column shown in \textbf{bold}, per dataset.}
+\caption{DIV2K test slice ($256 \times 256$, 8 qubits/dim, 100 images, MSE loss). Mean PSNR (dB) at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$, side-by-side: full-image transforms (left, gray bands) vs.\ $8 \times 8$ block-wrapped transforms (right, blue bands). Each panel groups \emph{Trained PDFT bases (this work)} above the \emph{Classical} baselines; \textbf{bold} method names mark the learned bases, and within each subgroup the best PSNR at every keep ratio is also \textbf{bold}. The pink-highlighted row marks the headline learned-blocked basis.}
 \label{tab:div2k_repr}
-\resizebox{\textwidth}{!}{\input{tables/published_8q_quickdraw}}
+\resizebox{\textwidth}{!}{\input{tables/published_div2k}}
+\end{table*}
+
+\begin{table*}[!tbp]
+\centering
+\caption{Quick Draw test slice ($32 \times 32$, 5 qubits/dim, 100 images, MSE loss). Same layout as \cref{tab:div2k_repr}: full-image (left, gray bands) vs.\ $8 \times 8$ block-wrapped (right, blue bands); \textbf{bold} method names mark the learned bases (this work) and the best PSNR within each subgroup is also \textbf{bold}. The pink-highlighted row marks the headline learned-blocked basis (Blocked RichBasis here, since it edges Blocked RealRichBasis on this dataset). MERA requires $m + n$ to be a power of 2 and is therefore omitted ($m + n = 10$).}
+\label{tab:quickdraw_repr}
+\resizebox{\textwidth}{!}{\input{tables/published_quickdraw}}
 \end{table*}
 
 \begin{figure}[!tbp]
@@ -439,7 +447,6 @@ Three effects are visible at 20\% keep (the column that matters most for practic
   \item \emph{Block-wrapping closes most of the BlockDCT gap.} Wrapping the same circuits in an $8 \times 8$ block (\cref{sec:block_wrapper}) lifts the best learned PSNR to 33.70~dB (Blocked RealRichBasis), $-0.3$~dB below BlockDCT and $+2.85$~dB above full-image DCT---a learned blocked basis that essentially ties the JPEG-equivalent fixed transform.
 \end{enumerate}
 
-The same ordering holds on SSIM at every keep ratio (e.g.\ at $20\%$: FFT 0.861 $<$ DCT 0.885 $<$ basic-variant QFT 0.896 $<$ Blocked RealRich 0.933 $<$ BlockDCT 0.937).
 
 \begin{figure}[!tbp]
 \centering
@@ -479,7 +486,7 @@ The same ordering holds on SSIM at every keep ratio (e.g.\ at $20\%$: FFT 0.861 
 
 The spectra in \cref{fig:spectra} make the block-size axis visual: FFT energy sits at the center of the Fourier plane, full-image DCT energy is compacted into the top-left corner of a single $256 \times 256$ tile, BlockDCT tiles that same compaction into $32 \times 32 = 1024$ sharp $8 \times 8$ tiles, and the trained QFT tiles it into a visibly coarser, softer pattern, consistent with a $16 \times 16$-pixel effective block with soft boundaries.
 The kept-coefficient masks of \cref{fig:masks} confirm the same reading: FFT selects a low-frequency disk; full-image DCT a low-frequency corner; BlockDCT a low-frequency cluster inside each $8 \times 8$ tile; and the learned QFT a soft cluster on a visibly larger scale.
-The reconstructions in~\cref{fig:recon} translate the numerical PSNR/SSIM of~\cref{tab:div2k_repr} into visible image quality, with BlockDCT and the trained QFT producing the sharpest results at every keep ratio.
+The reconstructions in~\cref{fig:recon} translate the numerical PSNR of~\cref{tab:div2k_repr} into visible image quality, with BlockDCT and the trained QFT producing the sharpest results at every keep ratio.
 The position the QFT occupies between DCT and BlockDCT is not accidental: \cref{sec:emergence} shows that the training produced a block-structured transform, with the corresponding gate-level decomposition.\label{sec:freqspace}
 
 \FloatBarrier
@@ -635,7 +642,7 @@ In each case the existing transform serves as a strong baseline with a published
 % ACKNOWLEDGMENTS
 % ============================================================================
 \begin{acknowledgments}
-This work was supported by JST SPRING, Japan, Grant Number JPMJSP2180. The author thanks the Institute of Science Tokyo for the▎research environment and the supervisors for their valuable guidance.
+This work was supported by JST SPRING, Japan, Grant Number JPMJSP2180. The author thanks the Institute of Science Tokyo for the research environment and the supervisors for their valuable guidance.
 \end{acknowledgments}
 
 % ============================================================================
@@ -768,7 +775,7 @@ MERA's purpose in our comparison is to test whether \emph{multi-scale} connectiv
 
 \Cref{sec:blockprior_results} reports the headline rate--distortion comparison between unblocked and block-wrapped topologies (\cref{tab:div2k_repr}).
 This appendix sweeps three additional axes that the main text condenses: block side, parameter density, and image resolution.
-All numbers are mean PSNR (dB) over the 50-image DIV2K test slice with the per-image-trained pairing used in the main text; runs use the \texttt{pdft-benchmarks} \texttt{generalized} preset (60 epochs, 500 training images, Adam, peak LR $3{\times}10^{-3}$, early-stopping patience 5) unless otherwise noted.
+All numbers are mean PSNR (dB) over the 50-image DIV2K test slice with the per-image-trained pairing used in the main text; runs use a deep training preset (60 epochs, 500 training images, Adam, peak LR $3{\times}10^{-3}$, early-stopping patience 5) unless otherwise noted.
 
 \subsection{Block-side sweep}
 \label{app:block_size_sweep}
@@ -788,7 +795,7 @@ All numbers are mean PSNR (dB) over the 50-image DIV2K test slice with the per-i
 \begin{figure}[!tbp]
 \centering
 \includegraphics[width=\columnwidth]{variations/variations_rich_ablation.pdf}
-\caption{Rich-basis ablation at 20\% keep on DIV2K $256 \times 256$. Horizontal axis: number of trainable real scalars per image in the corresponding \texttt{trained\_*.json}. Vertical axis: mean PSNR over the 50-image test set. BlockDCT~$8 \times 8$ ($0$ trainable parameters) is shown as the leftmost reference.}
+\caption{Rich-basis ablation at 20\% keep on DIV2K $256 \times 256$. Horizontal axis: number of trainable real scalars per image for the corresponding trained basis. Vertical axis: mean PSNR over the 50-image test set. BlockDCT~$8 \times 8$ ($0$ trainable parameters) is shown as the leftmost reference.}
 \label{fig:variations_rich_ablation}
 \end{figure}
 
@@ -800,7 +807,7 @@ All numbers are mean PSNR (dB) over the 50-image DIV2K test slice with the per-i
 \begin{figure*}[!tbp]
 \centering
 \includegraphics[width=\textwidth]{variations/variations_resolution.pdf}
-\caption{Resolution scaling. Left: $256 \times 256$ with 8 qubits per dimension (the main-text setting). Right: $1024 \times 1024$ with 10 qubits per dimension (\texttt{run\_div2k\_10q.py}, batch size 2 to fit memory). The ranking of bases is preserved across resolutions; the Entangled QFT and TEBD essentially tie, and the separable QFT trails by ${\sim}0.3$~dB.}
+\caption{Resolution scaling. Left: $256 \times 256$ with 8 qubits per dimension (the main-text setting). Right: $1024 \times 1024$ with 10 qubits per dimension (batch size 2 to fit memory). The ranking of bases is preserved across resolutions; the Entangled QFT and TEBD essentially tie, and the separable QFT trails by ${\sim}0.3$~dB.}
 \label{fig:variations_resolution}
 \end{figure*}
 
