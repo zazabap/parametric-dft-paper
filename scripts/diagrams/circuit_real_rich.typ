@@ -6,12 +6,6 @@
 
 #import "@preview/quill:0.7.1": *
 
-#align(center)[
-  #text(size: 9pt, weight: "bold", fill: rgb("#0a3d8c"))[#raw("real_rich")] #h(0.3em)
-  #text(size: 8pt, fill: gray)[$I_4 times.circle O^"inner"$, 42p (HEADLINE)]
-]
-#v(0.3em)
-
 #align(center, quantum-circuit(
   scale: 80%, row-spacing: 0.55em, column-spacing: 0.45em,
   lstick($x_1$), gate($I$), 1, 1, 1, 1, 1, 1, [\ ],
