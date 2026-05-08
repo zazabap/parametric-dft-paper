@@ -1,35 +1,16 @@
-\begin{tabular}{@{}c@{\hspace{1.5em}}c@{}}
-\begin{tabular}[t]{@{}lcccc@{}}
+\begin{tabular}{@{}lcccc@{\hspace{2em}}lcccc@{}}
 \toprule
-\textbf{Unblocked (full $256 \times 256$)} & $\rho{=}0.05$ & $\rho{=}0.10$ & $\rho{=}0.15$ & $\rho{=}0.20$ \\
+\multicolumn{5}{c}{\textbf{Unblocked (full $256 \times 256$)}} & \multicolumn{5}{c}{\textbf{$8 \times 8$ block-wrapped}} \\
+\cmidrule(lr){1-5}\cmidrule(l){6-10}
+Method & $\rho{=}0.05$ & $\rho{=}0.10$ & $\rho{=}0.15$ & $\rho{=}0.20$ & Method & $\rho{=}0.05$ & $\rho{=}0.10$ & $\rho{=}0.15$ & $\rho{=}0.20$ \\
 \midrule
-\multicolumn{5}{@{}l}{\textit{Trained PDFT bases (this work)}} \\
-QFT              & 24.91 & 27.30 & 29.20          & 30.91 \\
-Entangled QFT    & 25.07 & 27.53 & 29.48          & 31.23 \\
-TEBD             & 25.09 & 27.56 & \textbf{29.52} & \textbf{31.28} \\
-MERA             & 25.09 & 27.56 & \textbf{29.52} & \textbf{31.28} \\
-\addlinespace[2pt]
-\multicolumn{5}{@{}l}{\textit{Classical}} \\
-FFT              & 24.50          & 26.54          & 28.07 & 29.39 \\
-DCT              & 25.36          & 27.61          & 29.33 & 30.85 \\
-BD-PCA           & \textbf{25.44} & \textbf{27.74} & 29.51 & 31.07 \\
+\multicolumn{5}{@{}l}{\textit{PDFT (ours)}} & \multicolumn{5}{@{}l}{\textit{PDFT (ours)}} \\
+QFT              & 24.91          & 27.30          & 29.20          & 30.91          & Blocked QFT           & 25.18          & 28.09          & 30.30          & 32.26 \\
+Entangled QFT    & 25.07          & 27.53          & 29.48          & 31.23          & Blocked RichBasis     & 25.97          & 29.16          & 31.55          & 33.65 \\
+TEBD             & 25.09          & 27.56          & \textbf{29.52} & \textbf{31.28} & Blocked RealRichBasis & 25.97          & 29.18          & 31.59          & 33.70 \\
+\multicolumn{5}{@{}l}{\textit{Classical}} & \multicolumn{5}{@{}l}{\textit{Classical}} \\
+FFT              & 24.50          & 26.54          & 28.07          & 29.39          & Block-FFT             & 24.47          & 27.10          & 29.06          & 30.79 \\
+DCT              & 25.36          & 27.61          & 29.33          & 30.85          & Block-DCT             & 26.11          & \textbf{29.41} & \textbf{31.86} & \textbf{34.01} \\
+BD-PCA           & \textbf{25.44} & \textbf{27.74} & 29.51          & 31.07          & Block-BD-PCA          & \textbf{26.13} & 29.30          & 31.68          & 33.77 \\
 \bottomrule
-\end{tabular}
-&
-\begin{tabular}[t]{@{}lcccc@{}}
-\toprule
-\textbf{$8 \times 8$ block-wrapped} & $\rho{=}0.05$ & $\rho{=}0.10$ & $\rho{=}0.15$ & $\rho{=}0.20$ \\
-\midrule
-\multicolumn{5}{@{}l}{\textit{Trained PDFT bases (this work)}} \\
-Blocked QFT           & 25.18 & 28.09 & 30.30 & 32.26 \\
-Blocked RichBasis     & 25.97 & 29.16 & 31.55 & 33.65 \\
-Blocked RealRichBasis & 25.97 & 29.18 & 31.59 & 33.70 \\
-\addlinespace[2pt]
-\multicolumn{5}{@{}l}{\textit{Classical}} \\
-Block-FFT             & 24.47          & 27.10          & 29.06          & 30.79 \\
-Block-DCT             & 26.11          & \textbf{29.41} & \textbf{31.86} & \textbf{34.01} \\
-Block-BD-PCA          & \textbf{26.13} & 29.30          & 31.68          & 33.77 \\
-\bottomrule
-\end{tabular}
-\\
 \end{tabular}
