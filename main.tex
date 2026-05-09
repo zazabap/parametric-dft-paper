@@ -452,25 +452,25 @@ The peak migrates with $\rho$ in two clear directions: at lower $\rho$ on DIV2K 
 The optimal block size is therefore a 2D function of (content statistics, operating $\rho$); $b = 8$ is the empirical optimum at the paper's headline retention on natural-image content, the regime the headline tables actually evaluate.
 
 
-% ---------------------------------------------------------------------------
-% Headline 5-method reconstruction galleries (FFT, DCT, QFT, BlockDCT,
-% BlockRealRich) on Quick Draw img0 and DIV2K img390. Placeholder pending
-% pdft-benchmarks PR #28 (--methods flag): once that lands, regenerate with
-%
-%   tools/render_freq_recon_grid.py --dataset quickdraw --image-indices 0 \
-%       --methods fft,dct,qft,block_dct_8,real_rich_8 \
-%       --out figures/freq_recon_grid_compact.pdf
-%   tools/render_freq_recon_grid.py --dataset div2k_8q --div2k-source-indices 390 \
-%       --methods fft,dct,qft,block_dct_8,real_rich_8 \
-%       --out figures/freq_recon_grid_compact.pdf
-%
-% then copy the resulting PDFs to figures/benchmarks/freqspace/ and uncomment
-% the figure environments here. The full 13-method galleries live in App.
-% \ref{app:reconstruction_galleries} for verification.
-% ---------------------------------------------------------------------------
+\begin{figure*}[!htbp]
+\centering
+\begin{subfigure}[t]{\textwidth}
+\centering
+\includegraphics[width=\textwidth]{freqspace/spectra_5method_0390.pdf}
+\subcaption{Frequency-domain magnitude (peak-normalized $\log_{10}\!|F|$, shared color scale).}
+\end{subfigure}\\[6pt]
+\begin{subfigure}[t]{\textwidth}
+\centering
+\includegraphics[width=\textwidth]{freqspace/reconstructions_5method_0390.pdf}
+\subcaption{Reconstructions at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ (rows), with per-cell PSNR (dB) annotated.}
+\end{subfigure}
+\caption{DIV2K test image \#390 (an architectural fa\c{c}ade), five representative methods. Block-wrapped on the left (RealRichBasis $8 \times 8$, BlockDCT $8 \times 8$); full-image on the right (QFT, DCT, FFT). The block prior recovers high-frequency detail invisible to full-image FFT/DCT at every retention ratio; within the block-wrapped pair, the trained RealRichBasis matches the hand-designed BlockDCT to the eye. Full 13-method gallery in \cref{app:reconstruction_galleries}.}
+\label{fig:freqrecon_compact}
+\end{figure*}
 
-The DIV2K spectra in \cref{fig:freqrecon_div2k} make the block-size axis visual: full-image DCT energy compacts into the top-left corner of a single tile, BlockDCT tiles that same compaction into sharp $8 \times 8$ blocks, and the trained QFT produces a visibly coarser, softer pattern consistent with a $16 \times 16$-pixel effective block.
-The reconstructions in \cref{fig:freqrecon_quickdraw,fig:freqrecon_div2k} (full 13-method galleries in \cref{app:reconstruction_galleries}) translate the table numbers into visible quality: on Quick Draw, the trained block-wrapped bases preserve recognizable stroke topology even at $\rho = 0.05$, where the full-image classical bases collapse to a blurred blob; on DIV2K, BlockDCT and the trained block-wrapped bases preserve fine architectural detail visibly better than full-image FFT or DCT at every $\rho$.
+\Cref{fig:freqrecon_compact} translates the table numbers into visible quality on a representative DIV2K image: the block-wrapped methods (BlockDCT and the trained RealRichBasis) preserve fine architectural detail visibly better than full-image FFT or DCT at every $\rho$, and within the block-wrapped pair the trained basis is indistinguishable from the hand-designed BlockDCT to the eye.
+The 13-method gallery in \cref{app:reconstruction_galleries} confirms the same story across the remaining bases on this image and on Quick Draw: trained block-wrapped variants preserve recognizable stroke topology even at $\rho = 0.05$, where the full-image classical bases collapse to a blurred blob.
+The frequency-domain magnitudes in \cref{fig:freqrecon_compact}\,(a) and \cref{fig:freqrecon_div2k}\,(a) make the block-size axis visual: full-image DCT energy compacts into the top-left corner of a single tile, BlockDCT tiles that same compaction into sharp $8 \times 8$ blocks, and the trained QFT produces a visibly coarser, softer pattern consistent with a $16 \times 16$-pixel effective block.
 The position the trained QFT occupies between DCT and BlockDCT is not accidental, as \cref{sec:emergence} shows.
 
 \subsection{Emergent block structure in the trained QFT}

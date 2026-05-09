@@ -61,6 +61,10 @@ FREQ_CENTER="${FREQ_CENTER:-0390}"
 div2k_freq_src="$PDFT_PY_RESULTS/div2k_8q_pca_vs_block_dct/figures"
 copy_one "$div2k_freq_src/freq_recon_grid_img${FREQ_CENTER}_freq.pdf" "$OUTPUT_DIR/freqspace/spectra_${FREQ_CENTER}.pdf"
 copy_one "$div2k_freq_src/freq_recon_grid_img${FREQ_CENTER}.pdf"      "$OUTPUT_DIR/freqspace/reconstructions_${FREQ_CENTER}.pdf"
+# 5-method compact version (FFT, DCT, QFT, BlockDCT, BlockRealRich) for the
+# main-text headline figure; full 13-method gallery above goes to appendix.
+copy_one "$div2k_freq_src/freq_recon_grid_5method_img${FREQ_CENTER}_freq.pdf" "$OUTPUT_DIR/freqspace/spectra_5method_${FREQ_CENTER}.pdf"
+copy_one "$div2k_freq_src/freq_recon_grid_5method_img${FREQ_CENTER}.pdf"      "$OUTPUT_DIR/freqspace/reconstructions_5method_${FREQ_CENTER}.pdf"
 
 # Quick Draw centerpiece image: same convention.
 QD_FREQ_CENTER="${QD_FREQ_CENTER:-0}"
