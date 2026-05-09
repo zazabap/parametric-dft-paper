@@ -303,12 +303,14 @@ The top-$k$ selection ranks coefficients by a frequency-weighted score rather th
   w_{i,j} = 1 - \frac{d_{i,j}}{2\, d_{\max}},
 \end{equation}
 where $d_{i,j} = \sqrt{(i - c_i)^2 + (j - c_j)^2}$ is the Euclidean distance from frequency bin $(i,j)$ to the DC bin $(c_i, c_j)$, and $d_{\max}$ is its maximum over the spectrum.
-Low-frequency coefficients receive up to a $2{\times}$ boost in retention score, reflecting the greater sensitivity of the human visual system to low-frequency content.
+Low-frequency coefficients receive up to a $2{\times}$ boost in retention score, consistent with empirical compressibility under perceptual quality metrics.
+The weighting only re-orders which coefficients survive top-$k$ truncation; it does not enter the reconstruction MSE directly.
+We do not isolate its contribution from that of the trained basis: a matched ablation against plain magnitude top-$k$ is left to follow-up work, as the focus of this paper is basis search rather than scoring.
 
 \subsection{Straight-through gradient for top-$k$}
 \label{sec:topk_grad}
 
-Top-$k$ selection is non-differentiable: the set $\mathcal{S} \subseteq \{1, \dots, N\}$ of retained indices changes discontinuously with $\mathbf{y}$.
+Top-$k$ selection is non-differentiable: the set $\mathcal{S} \subseteq \{1, \dots, N^2\}$ of retained indices changes discontinuously with $\mathbf{y}$.
 We adopt the \emph{straight-through estimator}~\cite{bengio2013estimating}, which passes gradients through retained coefficients and zeros them elsewhere:
 \begin{equation}
   \frac{\partial\, \topk(\mathbf{y}, k)}{\partial y_{i,j}} =
@@ -374,7 +376,7 @@ The two datasets sit at distinct positions on the AR(1) source-statistics axis (
 \label{fig:ar1_histogram}
 \end{figure}
 
-All learned bases are trained per image using Riemannian Adam (\cref{sec:riemannian}) on the MSE loss (\cref{eq:mse_loss}) with $k = 10\%$ coefficients retained during training. The remaining hyperparameters (cosine LR schedule, batch size, validation split, seed) are listed in~\cref{app:benchmark}.
+All learned bases are trained per image using Riemannian Adam (\cref{sec:riemannian}) on the MSE loss (\cref{eq:mse_loss}) with $k = 10\%$ coefficients retained during training. The remaining hyperparameters (cosine LR schedule, batch size, validation split, seed) are listed in~\cref{app:benchmark}. Reported numbers are single-seed (seed = 42 throughout); seed variance has not been characterized in this paper and is left to follow-up.
 
 We report PSNR ($10 \log_{10}(1/\text{MSE})$) at retention ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$, averaged over the 50-image test slice of each dataset.
 Every method evaluated here uses \emph{top-$k$} truncation: the $k = \lfloor \rho N \rfloor$ coefficients with the largest absolute magnitude per image are retained and the rest zeroed, matching how JPEG-style codecs entropy-code only the surviving coefficients.
@@ -387,6 +389,9 @@ We compare against the following classical references along the \emph{block-size
   \item \textbf{BlockFFT}, \textbf{BlockDCT} ($8 \times 8$): the same transforms applied independently to each $8 \times 8$ tile; BlockDCT is the JPEG~\cite{wallace1992jpeg} reference.
   \item \textbf{BD-PCA}, \textbf{BlockBD-PCA} ($8 \times 8$): bilateral 2D-PCA with row and column eigenbases fitted on the training slice and applied as $\Phi(\mathbf{x}) = U^\top \mathbf{x} V$, full-image and $8 \times 8$-tiled respectively.
 \end{itemize}
+
+End-to-end learned codecs~\cite{balle2017end, theis2017} are not included as baselines: they couple a non-unitary nonlinear encoder with entropy coding, so their rate is measured in bits-per-pixel rather than the retained-coefficient ratio $\rho$ used here.
+A like-for-like comparison would require a fixed-protocol common axis (e.g., bits-per-pixel at matched reconstruction MSE) and is left to follow-up work.
 
 \subsection{Topology comparison within the full-image unitary family}
 \label{sec:topology_div2k}
@@ -567,12 +572,7 @@ A whole-frame counterexample (\cref{sec:per_image}) bounds the result: on images
 We have introduced a continuous parametric family of unitary image bases, obtained by relaxing the Hadamard and controlled-phase gates of the Cooley--Tukey FFT into free elements of $U(2)$ and $U(1)^4$ and optimizing on the Riemannian manifold of unitaries. The family contains the FFT, full-image DCT, and BlockDCT as distinguished points, and gradient-based training moves the basis continuously between them.
 
 The performance is predicted by source regime. On DIV2K natural images, well approximated by an AR(1)--Gaussian source where BlockDCT is asymptotically optimal, the learned $8 \times 8$ block-wrapped basis matches JPEG's BlockDCT to within $0.31$~dB at $20\%$ retention. On Quick Draw line drawings, where the AR(1) assumption fails, the same family outperforms every classical baseline tested by at least $+5.0$~dB at the same retention, with per-image training under five minutes on a single RTX~3090.
-
-\paragraph{Beyond natural images.}
-The framework's only structural assumption is that signals admit a sparse representation in some unitary basis — a setting in which a fixed FFT or DCT is currently the standard tool.
-\emph{Medical imaging} relies on JPEG/JPEG-2000 for archive compression and on fixed Fourier sensing matrices for compressed-sensing MRI~\cite{lustig2007sparse}; a transform trained per anatomical site exposes the sensing matrix to gradient-based co-design with the reconstructor.
-\emph{Hyperspectral satellite imagery} uses spatial--spectral block-based DCT codecs~\cite{rusyn2016hyperspectral} that ignore strong spectral correlations a learned per-band unitary can capture.
-\emph{Audio coding} is built around the modified DCT~\cite{princen1986mdct}; the parametric family extends naturally to 1D, providing the same continuous interpolation between full-signal and block-local windows that proved decisive on images.
+Two limitations bound the result: per-image training is not yet a deployable codec, and content with whole-frame correlations (\cref{sec:per_image}) underperforms all block-structured priors, the trained QFT included.
 
 % ============================================================================
 % ACKNOWLEDGMENTS
