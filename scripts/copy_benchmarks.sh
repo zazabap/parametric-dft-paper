@@ -8,9 +8,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 RESULTS_DIR="$REPO_DIR/ParametricDFT-Benchmarks.jl/results"
 ANALYSIS_DIR="$REPO_DIR/ParametricDFT-Benchmarks.jl/analysis"
+PDFT_PY_RESULTS="$REPO_DIR/pdft-benchmarks/results"  # python pdft-benchmarks results tree
 OUTPUT_DIR="$REPO_DIR/figures/benchmarks"
 
-mkdir -p "$OUTPUT_DIR/mse" "$OUTPUT_DIR/topology" "$OUTPUT_DIR/freqspace"
+mkdir -p "$OUTPUT_DIR/mse" "$OUTPUT_DIR/topology" "$OUTPUT_DIR/freqspace" "$OUTPUT_DIR/sweep"
 
 copy_one() {
     local src="$1"
@@ -64,5 +65,11 @@ copy_one "$freq_src/frequency_spectra_3d.pdf"   "$OUTPUT_DIR/freqspace/spectra_3
 copy_one "$freq_src/kept_coefficient_masks.pdf" "$OUTPUT_DIR/freqspace/masks_${FREQ_CENTER}.pdf"
 copy_one "$freq_src/reconstructions.pdf"        "$OUTPUT_DIR/freqspace/reconstructions_${FREQ_CENTER}.pdf"
 copy_one "$freq_src/cumulative_energy.pdf"      "$OUTPUT_DIR/freqspace/cumulative_energy_${FREQ_CENTER}.pdf"
+
+echo "Block-size sweep figures (Python pdft-benchmarks) -> $OUTPUT_DIR/sweep"
+copy_one "$PDFT_PY_RESULTS/block_size_sweep/quickdraw/figures/sweep_quickdraw.pdf" \
+         "$OUTPUT_DIR/sweep/sweep_quickdraw.pdf"
+copy_one "$PDFT_PY_RESULTS/block_size_sweep/div2k_8q/figures/sweep_div2k_8q.pdf" \
+         "$OUTPUT_DIR/sweep/sweep_div2k_8q.pdf"
 
 echo "Benchmark plots copied to $OUTPUT_DIR"

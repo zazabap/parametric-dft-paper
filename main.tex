@@ -435,6 +435,13 @@ Basic-variant training gives $+2.3$~dB (QFT 24.35~dB vs DCT), roughly six times 
 Block-wrapping with richer within-block gates lifts the result by a further $+5.97$~dB (Blocked RichBasis 32.60~dB vs BlockDCT 26.63~dB), which is the headline gap of the paper.
 On non-AR(1) sources, the dominant lever is the within-block basis, not the block size: BlockDCT's hand-designed $8 \times 8$ cosine basis leaves roughly $6$~dB of sparsity on the table.
 
+\paragraph{Why $b = 8$, defended on this paper's data.}
+The four-effects decomposition above is at the headline $b = 8$.
+To defend that choice we ran a full sweep across $b \in \{2, 4, 8, 16, 32, 64, 128\}$ for the classical baselines and over the HEVC transform-unit set $\{4, 8, 16, 32\}$ (DIV2K) / $\{4, 8, 16\}$ (Quick Draw) for the trained block-wrapped bases, at four retention ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$, training each cell at the same 1008-step preset (\cref{appendix:block_size_sweep}).
+At $\rho = 0.20$ on DIV2K, every dataset-fitted family (BlockDCT, BlockBD-PCA, RichBasis, RealRichBasis) peaks at $b = 8$, recovering the headline numbers in \cref{tab:div2k_repr} to $< 0.01$~dB.
+The peak migrates with $\rho$ in two clear directions: at lower $\rho$ on DIV2K (more aggressive compression), $b = 16$ wins for the classical bases and $b = 32$ for the trained bases, because a tiny coefficient budget is best spent on a few low-frequency modes of a wider window; on Quick Draw, BlockDCT \emph{monotone-decreases} with $b$ at $\rho \ge 0.15$ (the all-white-background regime makes small tiles trivially compressible), while the dataset-fitted bases (BlockBD-PCA, RealRichBasis) peak at $b = 4$.
+The optimal block size is therefore a 2D function of (content statistics, operating $\rho$); $b = 8$ is the empirical optimum at the paper's headline retention on natural-image content, the regime the headline tables actually evaluate.
+
 
 \begin{figure*}[!htbp]
 \centering
@@ -776,5 +783,32 @@ MERA's purpose in our comparison is to test whether \emph{multi-scale} connectiv
 \caption{The three block-wrapped trained-basis topologies at Quick Draw geometry ($m = n = 5$). Blocked QFT ($I_4 \otimes F_3$ per dimension, 30 params), RichBasis ($I_4 \otimes U^{(4)}$ inner, 108 params), and RealRichBasis ($I_4 \otimes O^{(4)}$ inner, 42 params; the headline learned basis).}
 \label{fig:topology_gallery}
 \end{figure*}
+
+\section{Block-size sweep}\label{appendix:block_size_sweep}
+
+We sweep the inner block size $b$ across $\{2, 4, 8, 16, 32, 64, 128\}$ on DIV2K and $\{2, 4, 8, 16\}$ on Quick Draw, at four retention ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$, training each block-wrapped trained-basis cell at the same 1008-step preset used for the headline tables (\cref{sec:setup}).
+\Cref{fig:appendix_block_sweep_div2k,fig:appendix_block_sweep_quickdraw} render the multi-$\rho$ PSNR curves for three representative families: BlockDCT (HEVC-style classical), BlockBD-PCA (dataset-fitted classical), and the headline trained RealRichBasis.
+Three observations support the discussion in \cref{sec:blocksize}.
+First, on DIV2K every dataset-fitted family domes at $b = 8$ at the headline $\rho = 0.20$, with the trained-basis peak reproducing the existing $\sim$33.7~dB headline.
+Second, the peak position migrates with $\rho$: at $\rho \le 0.10$ the classical bases prefer $b = 16$ and the trained bases $b = 32$, because the limited coefficient budget pays best across a wider window dominated by a few low-frequency modes.
+Third, on Quick Draw the BlockDCT and BlockFFT families \emph{monotone-decrease} with $b$ at high $\rho$, while the dataset-fitted bases (BlockBD-PCA, RealRichBasis) prefer $b = 4$; the optimal block size is therefore content-dependent and rate-dependent in different ways on the two datasets.
+The within-family choice of inner topology contributes less than $2$~dB at the (family $\times \rho$)-best $b$ on either dataset, much smaller than the cross-$b$ spread at fixed $\rho$.
+
+\begin{figure*}[!htbp]
+  \centering
+  \includegraphics[width=\textwidth]{sweep/sweep_div2k_8q.pdf}
+  \caption{DIV2K-8q, $256 \times 256$. PSNR vs.\ block size $b$ at four retention ratios. Sequential blue: light $\to$ dark for increasing $\rho$. The vertical dashed line marks the paper's headline $b = 8$. Diamond markers indicate the family-wise peak per $\rho$. Three columns: BlockDCT (HEVC-style classical), BlockBD-PCA (dataset-fitted classical), and the headline trained RealRichBasis. The dome at $b = 8$ is sharp at $\rho = 0.20$ for every family; the peak migrates to $b = 16$ for classical bases and $b = 32$ for the trained basis at $\rho \le 0.10$.}
+  \label{fig:appendix_block_sweep_div2k}
+\end{figure*}
+
+\begin{figure*}[!htbp]
+  \centering
+  \includegraphics[width=\textwidth]{sweep/sweep_quickdraw.pdf}
+  \caption{Quick Draw, $32 \times 32$. Same protocol as \cref{fig:appendix_block_sweep_div2k}. BlockDCT \emph{monotone-decreases} with $b$ at every $\rho$; the all-white background of line drawings makes 2$\times$2 tiles trivially compressible (the $b = 2$, $\rho = 0.20$ point at $44.6$~dB is clipped by the y-axis ceiling). The dataset-fitted BlockBD-PCA peaks at $b = 4$ at high $\rho$; RealRichBasis is essentially flat across $b$ ($< 0.5$~dB cross-$b$ spread at every $\rho$), reflecting the content-independence of its inner gates on this regime.}
+  \label{fig:appendix_block_sweep_quickdraw}
+\end{figure*}
+
+\paragraph{Implementation note.}
+RealRichBasis and RichBasis at $b = 32$ on DIV2K (i.e.\ $\text{inner}\_m = \text{inner}\_n = 5$, ten qubits per inner block) emit $2(m + m^2) = 60$ fresh wire labels in their einsum representation, exceeding the 52-character \texttt{a-zA-Z} pool of the original \texttt{pdft} circuit builder. Eliminating the pool required replacing the single-string contraction with a stepped \texttt{jnp.tensordot} path that applies one gate per call and recycles labels across steps; the external API and Hadamard-first tensor ordering are preserved, so saved checkpoints remain compatible (\texttt{pdft} pull request~15).
 
 \end{document}
