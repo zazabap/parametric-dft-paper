@@ -62,7 +62,7 @@
 % ABSTRACT
 % ============================================================================
 \begin{abstract}
-Is the Fourier basis (the DFT, the DCT, and their block-wise variants used by JPEG and HEVC) the optimal unitary transform for image compression, or merely the most mathematically tractable? To answer this question, we relax the gates of the Quantum Fourier Transform and its connectivity variants into free unitaries. The result is a parametric quantum-circuit family of image bases with $O(N \log N)$ forward- and backward-pass cost per image. Seven circuit structures (four full-image and three $8 \times 8$ block-wrapped) are benchmarked against fixed and dataset-fitted classical baselines on DIV2K natural images and Quick Draw line drawings. The answer depends on source statistics. On Quick Draw, the empirical lag-1 autocorrelation $\hat{\rho}_{\mathrm{AR}} \approx 0.73$ sits far from the AR(1)--Gaussian limit at which the DCT is asymptotically optimal. There, the trained block-wrapped basis exceeds JPEG's $8 \times 8$ BlockDCT by $+6$~dB at $20\%$ retention. On DIV2K, where the source is approximately AR(1)--Gaussian, the same family attains parity with BlockDCT to within $0.31$~dB. The framework is released as the open-source Python library \texttt{pdft}, with a companion Julia implementation \texttt{ParametricDFT.jl}.
+Is the Fourier basis (the Discrete Fourier Transform [DFT], the Discrete Cosine Transform [DCT], and their block-wise variants used by JPEG and the High Efficiency Video Coding [HEVC] standard) the optimal unitary transform for image compression, or merely the most mathematically tractable? To answer this question, we relax the gates of the Quantum Fourier Transform and its connectivity variants into free unitaries. The result is a parametric quantum-circuit family of image bases with $O(N \log N)$ forward- and backward-pass cost per image. Seven circuit structures (four full-image and three $8 \times 8$ block-wrapped) are benchmarked against fixed and dataset-fitted classical baselines on DIV2K natural images and Quick Draw line drawings. The answer depends on source statistics. On Quick Draw, the empirical lag-1 autocorrelation $\hat{\rho}_{\mathrm{AR}} \approx 0.73$ sits far from the first-order autoregressive (AR(1))--Gaussian limit at which the DCT is asymptotically optimal. There, the trained block-wrapped basis exceeds JPEG's $8 \times 8$ BlockDCT by $+6$~dB at $20\%$ retention. On DIV2K, where the source is approximately AR(1)--Gaussian, the same family attains parity with BlockDCT to within $0.31$~dB. The framework is released as the open-source Python library \texttt{pdft}, with a companion Julia implementation \texttt{ParametricDFT.jl}.
 \end{abstract}
 
 % ============================================================================
@@ -80,7 +80,7 @@ Parameterized quantum circuits emerged as the workhorse of variational quantum a
 The observation closing the circle is that the DFT itself is a quantum circuit, the Quantum Fourier Transform, whose Hadamard and controlled-phase gates exactly implement the Cooley--Tukey butterfly; relaxing those gates turns basis selection into a search over a compact parametric circuit.
 
 Two obstacles have kept this program from being carried out.
-End-to-end learned codecs~\cite{balle2017end, theis2017} sidestep the question by absorbing everything into a convolutional autoencoder; block-transform learning~\cite{pons2024rdlt} parametrizes in unconstrained Euclidean space and fixes the block size, trading away the unitarity that underwrites transform coding.
+End-to-end learned codecs~\cite{balle2017end, theis2017} sidestep the question by absorbing everything into a convolutional autoencoder; block-transform learning~\cite{pons2024rdlt} parameterizes in unconstrained Euclidean space and fixes the block size, trading away the unitarity that underwrites transform coding.
 A direct gradient search over unitary bases compounds the issue: unitarity is a hard manifold constraint requiring Riemannian optimization on matrix manifolds~\cite{edelman1998geometry, absil2008optimization, boumal2023introduction, becigneul2019riemannian, kasai2019riemannian, khaneja2005optimal, wen2013feasible}, and the top-$k$ coefficient selection that defines transform coding is non-differentiable~\cite{bengio2013estimating}.
 
 We resolve both obstacles by choosing parameterization and optimizer jointly.
@@ -538,7 +538,7 @@ The block prior that ties JPEG on AR(1)-like DIV2K is therefore the principal ve
 \end{figure*}
 
 \Cref{fig:training_curves} shows that the parametric circuits, despite their $O(n^2)$ phase counts, converge well within the 1008-step budget on both datasets: the validation loss is essentially flat past step ${\sim}700$, with gains beyond the budget moving the published numbers by at most a few hundredths of a dB.
-The trained block-wrapped bases (RichBasis, RealRichBasis) reach a validation floor roughly twice as low on Quick Draw as on DIV2K, manifesting the headline $+6$~dB rate-distortion gap as training behaviour.
+The trained block-wrapped bases (RichBasis, RealRichBasis) reach a validation floor roughly twice as low on Quick Draw as on DIV2K, manifesting the headline $+6$~dB rate-distortion gap as training behavior.
 
 % ============================================================================
 % DISCUSSION
