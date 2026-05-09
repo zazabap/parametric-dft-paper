@@ -473,20 +473,20 @@ The optimal block size is therefore a 2D function of (content statistics, operat
 \centering
 \begin{subfigure}[t]{\textwidth}
 \centering
-\includegraphics[width=\textwidth]{freqspace/div2k_freq_img11.pdf}
-\subcaption{Frequency-space spectra (peak-normalized $\log_{10}\!|F|$, shared color scale).}
+\includegraphics[width=\textwidth]{freqspace/spectra_0390.pdf}
+\subcaption{Frequency-domain magnitude (peak-normalized $\log_{10}\!|F|$, shared color scale).}
 \end{subfigure}\\[6pt]
 \begin{subfigure}[t]{\textwidth}
 \centering
-\includegraphics[width=\textwidth]{freqspace/div2k_recon_img11.pdf}
-\subcaption{Reconstructions at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ (rows), with per-cell PSNR (dB) annotated.}
+\includegraphics[width=\textwidth]{freqspace/reconstructions_0390.pdf}
+\subcaption{Reconstructions at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ (columns), with PSNR (dB) and SSIM annotated.}
 \end{subfigure}
-\caption{DIV2K test image \#11, all compared methods. Same column order as \cref{fig:freqrecon_quickdraw}; the trained block-wrapped bases push energy into a small number of low-coefficient cells per block (bright clusters in Blocked QFT / RichBasis / RealRichBasis, band structure in BlockDCT / BlockBD-PCA), and the BD-PCA panel concentrates energy in the top-left (low-frequency / high-eigenvalue) region, the separable-KLT analog of the DCT spectrum.}
+\caption{DIV2K test image \#390 (an architectural fa\c{c}ade, rich in high-frequency detail). Four representative methods shown: full-image FFT and DCT (no block prior), BlockDCT~$8 \times 8$ (hand-designed block prior), and the trained basic-variant QFT. BlockDCT and the trained QFT preserve high-frequency detail visibly better than full-image FFT or DCT at every retention ratio; their spectra concentrate energy in a per-block $8 \times 8$ tiling (BlockDCT) and a coarser softer $16 \times 16$ tiling (QFT), respectively.}
 \label{fig:freqrecon_div2k}
 \end{figure*}
 
 The DIV2K spectra in \cref{fig:freqrecon_div2k} make the block-size axis visual: full-image DCT energy compacts into the top-left corner of a single tile, BlockDCT tiles that same compaction into sharp $8 \times 8$ blocks, and the trained QFT produces a visibly coarser, softer pattern consistent with a $16 \times 16$-pixel effective block.
-The reconstructions in \cref{fig:freqrecon_quickdraw,fig:freqrecon_div2k} translate the table numbers into visible quality: on Quick Draw, the trained block-wrapped bases preserve recognizable stroke topology even at $\rho = 0.05$, where the full-image classical bases collapse to a blurred blob; on DIV2K, BlockDCT and the trained block-wrapped bases are comparably sharp at every $\rho$.
+The reconstructions in \cref{fig:freqrecon_quickdraw,fig:freqrecon_div2k} translate the table numbers into visible quality: on Quick Draw, the trained block-wrapped bases preserve recognizable stroke topology even at $\rho = 0.05$, where the full-image classical bases collapse to a blurred blob; on DIV2K, BlockDCT and the trained QFT preserve fine architectural detail visibly better than full-image FFT or DCT at every $\rho$.
 The position the trained QFT occupies between DCT and BlockDCT is not accidental, as \cref{sec:emergence} shows.
 
 \subsection{Emergent block structure in the trained QFT}
