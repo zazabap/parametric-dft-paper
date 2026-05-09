@@ -420,6 +420,38 @@ The headline learned-blocked basis is RealRichBasis on DIV2K, where it leads the
 \end{subtable}
 \end{table*}
 
+\begin{figure*}[!t]
+\centering
+\begin{subfigure}[t]{\textwidth}
+\centering
+\includegraphics[width=\textwidth]{freqspace/quickdraw_freq_5method_img0.pdf}
+\subcaption{Frequency-domain magnitude (peak-normalized $\log_{10}\!|F|$, shared color scale).}
+\end{subfigure}\\[6pt]
+\begin{subfigure}[t]{\textwidth}
+\centering
+\includegraphics[width=\textwidth]{freqspace/quickdraw_recon_5method_img0.pdf}
+\subcaption{Reconstructions at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ (rows), with per-cell PSNR (dB) annotated.}
+\end{subfigure}
+\caption{Quick Draw test image \#0 (cat sketch), five representative methods. Leftmost cell is the original image; remaining columns are block-wrapped methods (RealRichBasis, BlockDCT) followed by full-image methods (QFT, DCT, FFT). The trained RealRichBasis preserves recognizable stroke topology at every $\rho$ while full-image FFT/DCT/QFT collapse to a blurred blob at $\rho = 0.05$. Full 13-method gallery in \cref{app:reconstruction_galleries}.}
+\label{fig:freqrecon_compact_qd}
+\end{figure*}
+
+\begin{figure*}[!t]
+\centering
+\begin{subfigure}[t]{\textwidth}
+\centering
+\includegraphics[width=\textwidth]{freqspace/spectra_5method_0390.pdf}
+\subcaption{Frequency-domain magnitude (peak-normalized $\log_{10}\!|F|$, shared color scale).}
+\end{subfigure}\\[6pt]
+\begin{subfigure}[t]{\textwidth}
+\centering
+\includegraphics[width=\textwidth]{freqspace/reconstructions_5method_0390.pdf}
+\subcaption{Reconstructions at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ (rows), with per-cell PSNR (dB) annotated.}
+\end{subfigure}
+\caption{DIV2K test image \#390 (architectural fa\c{c}ade), same protocol and column order as \cref{fig:freqrecon_compact_qd}. Both block-wrapped methods preserve fine architectural detail visibly better than full-image FFT or DCT at every $\rho$; within the block-wrapped pair the trained RealRichBasis matches the hand-designed BlockDCT to the eye.}
+\label{fig:freqrecon_compact_div2k}
+\end{figure*}
+
 We first read off the DIV2K topology comparison.
 The four learned basic-variant topologies (QFT, Entangled QFT, TEBD, MERA) sit within ${\sim}0.4$~dB of one another at every keep ratio, with TEBD and MERA tied at the top (\cref{tab:div2k_repr}, unblocked-learned subgroup).
 The three additional learned bases produce 2D spectra and kept-coefficient masks that are visually indistinguishable from the separable QFT, so the figures in the remainder of this section show only the separable QFT as a representative member of the family.
@@ -451,38 +483,6 @@ At $\rho = 0.20$ on DIV2K, every dataset-fitted family (BlockDCT, BlockBD-PCA, R
 The peak migrates with $\rho$ in two clear directions: at lower $\rho$ on DIV2K (more aggressive compression), $b = 16$ wins for the classical bases and $b = 32$ for the trained bases, because a tiny coefficient budget is best spent on a few low-frequency modes of a wider window; on Quick Draw, BlockDCT \emph{decreases monotonically} with $b$ at $\rho \ge 0.15$ (the all-white-background regime makes small tiles trivially compressible), while the dataset-fitted bases (BlockBD-PCA, RealRichBasis) peak at $b = 4$.
 The optimal block size is therefore a 2D function of (content statistics, operating $\rho$); $b = 8$ is the empirical optimum at the paper's headline retention on natural-image content, the regime the headline tables actually evaluate.
 
-
-\begin{figure*}[!htbp]
-\centering
-\begin{subfigure}[t]{\textwidth}
-\centering
-\includegraphics[width=\textwidth]{freqspace/quickdraw_freq_5method_img0.pdf}
-\subcaption{Frequency-domain magnitude (peak-normalized $\log_{10}\!|F|$, shared color scale).}
-\end{subfigure}\\[6pt]
-\begin{subfigure}[t]{\textwidth}
-\centering
-\includegraphics[width=\textwidth]{freqspace/quickdraw_recon_5method_img0.pdf}
-\subcaption{Reconstructions at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ (rows), with per-cell PSNR (dB) annotated.}
-\end{subfigure}
-\caption{Quick Draw test image \#0 (cat sketch), five representative methods. Leftmost cell is the original image; remaining columns are block-wrapped methods (RealRichBasis, BlockDCT) followed by full-image methods (QFT, DCT, FFT). The trained RealRichBasis preserves recognizable stroke topology at every $\rho$ while full-image FFT/DCT/QFT collapse to a blurred blob at $\rho = 0.05$. Full 13-method gallery in \cref{app:reconstruction_galleries}.}
-\label{fig:freqrecon_compact_qd}
-\end{figure*}
-
-\begin{figure*}[!htbp]
-\centering
-\begin{subfigure}[t]{\textwidth}
-\centering
-\includegraphics[width=\textwidth]{freqspace/spectra_5method_0390.pdf}
-\subcaption{Frequency-domain magnitude (peak-normalized $\log_{10}\!|F|$, shared color scale).}
-\end{subfigure}\\[6pt]
-\begin{subfigure}[t]{\textwidth}
-\centering
-\includegraphics[width=\textwidth]{freqspace/reconstructions_5method_0390.pdf}
-\subcaption{Reconstructions at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ (rows), with per-cell PSNR (dB) annotated.}
-\end{subfigure}
-\caption{DIV2K test image \#390 (architectural fa\c{c}ade), same protocol and column order as \cref{fig:freqrecon_compact_qd}. Both block-wrapped methods preserve fine architectural detail visibly better than full-image FFT or DCT at every $\rho$; within the block-wrapped pair the trained RealRichBasis matches the hand-designed BlockDCT to the eye.}
-\label{fig:freqrecon_compact_div2k}
-\end{figure*}
 
 \Cref{fig:freqrecon_compact_qd,fig:freqrecon_compact_div2k} translate the table numbers into visible quality on one representative image per dataset.
 On Quick Draw, the trained block-wrapped basis (RealRichBasis) preserves recognizable stroke topology even at $\rho = 0.05$, where the full-image classical bases collapse to a blurred blob; on DIV2K, both block-wrapped methods (BlockDCT and the trained RealRichBasis) preserve fine architectural detail visibly better than full-image FFT or DCT at every $\rho$, and within the block-wrapped pair the trained basis is indistinguishable from the hand-designed BlockDCT to the eye.
