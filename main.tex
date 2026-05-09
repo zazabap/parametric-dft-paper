@@ -491,11 +491,7 @@ Whereas $H$ creates a DFT-butterfly superposition across the qubit's $|0\rangle 
 A frozen qubit therefore behaves as a \emph{classical block index}, and the transform factors into blocks of size $2^{m_{\mathrm{free}}} \times 2^{n_{\mathrm{free}}}$ pixels, where $m_{\mathrm{free}}$ and $n_{\mathrm{free}}$ are the still-mixing qubit counts per dimension.
 
 In each of the row and column dimensions, four of the eight Hadamard-role gates retain their Hadamard role and the remaining four freeze, predominantly to $Z$-like (with one $X$-like in the column dimension).
-The freezing is sharp rather than gradual: the off-diagonal magnitudes of frozen gates sit at the ${\sim}1\%$ level.
-All 56 controlled-phase gates retain their full $U(1)^4$ parameterization, so the intra-block transform remains rich.
-
-This produces a mechanical reading of the block-size axis: BlockDCT sits at block size $2^3 = 8$ by hand design, the trained QFT lands at $2^4 = 16$ because four of eight qubits have frozen, and full-image DCT sits at $2^8 = 256$.
-The remaining ${\sim}1.5$~dB gap to BlockDCT is the cost of a larger, softer block: the QFT's block side is twice that of JPEG's, and its boundaries are not sharp.
+The freezing is sharp rather than gradual: off-diagonal magnitudes of frozen gates sit at the ${\sim}1\%$ level, and all 56 controlled-phase gates retain their full $U(1)^4$ parameterization, so the intra-block transform remains rich.
 
 \FloatBarrier
 
@@ -504,13 +500,8 @@ The remaining ${\sim}1.5$~dB gap to BlockDCT is the cost of a larger, softer blo
 
 While the representative image of \cref{tab:div2k_repr} reflects typical DIV2K test-set behavior, a small number of images push hard against the block-prior assumption.
 The clearest counterexample in our evaluation set is an image dominated by long-range, whole-frame correlations (e.g.\ a sweeping landscape with no block-local texture).
-At 20\% keep, the four transforms on this counterexample achieve FFT 24.03, DCT 25.31, BlockDCT 25.99, QFT 24.21 dB (PSNR).
-The BlockDCT $-$ DCT gap shrinks to $+0.68$~dB, compared with the $\sim\!+4$~dB seen on the representative image and averaged across the rest of the test set: the block-structure prior gains almost nothing over a full-image DCT here.
-This is also the only image in our evaluation set where the learned QFT underperforms full-image DCT ($-1.10$~dB).
-
-The QFT's failure on this counterexample is therefore not a failure of training: it is the \emph{same} failure mode as BlockDCT.
-Images whose dominant correlations span the whole frame (rather than being block-local) are not well-served by any transform whose coefficient selection is structured by blocks, and the trained QFT inherits this weakness precisely because its learned prior \emph{is} a block prior.
-Future work that removes the block assumption, for example by adapting the frozen-vs-mixing pattern \emph{per image} or via multi-scale parameterizations, would specifically target this regime.
+At 20\% keep, the four transforms on this counterexample achieve FFT 24.03, DCT 25.31, BlockDCT 25.99, QFT 24.21 dB (PSNR): the BlockDCT $-$ DCT gap shrinks from the $\sim\!+4$~dB test-set average to $+0.68$~dB, and this is the only image in our evaluation set where the learned QFT underperforms full-image DCT ($-1.10$~dB).
+The QFT's failure here is the same failure mode as BlockDCT, not a failure of training (\cref{sec:discussion}).
 
 \FloatBarrier
 
@@ -529,13 +520,10 @@ The block factorization observed in \cref{sec:emergence} suggests a complementar
 % \label{fig:variations_rd}
 % \end{figure}
 
-Four observations follow.
-First, the simplest block-wrapping (Blocked QFT, the QFT inner circuit applied per $8 \times 8$ tile) lifts the 20\%-keep PSNR from $30.91$~dB (unblocked QFT) to $32.26$~dB, an increase of $+1.35$~dB that narrows the gap to BlockDCT~$8 \times 8$ from $-3.10$~dB to $-1.75$~dB without changing the inner gates.
-Second, replacing the QFT's diagonal controlled-phase gates with richer two-qubit gates lifts the result further: RichBasis ($H + U(4)$) reaches $33.65$~dB, and the headline RealRichBasis ($H + O(4)$) reaches $33.70$~dB, within $0.31$~dB of BlockDCT~$8 \times 8$ and within $0.07$~dB of the dataset-fitted bilateral KLT baseline (Block-BD-PCA, $33.77$~dB). This is the parity expected on an AR(1)-like source where BlockDCT is asymptotically optimal.
-Third, RealRichBasis matches RichBasis to within $0.05$~dB at less than half the parameter count, indicating that the imaginary parameters are not load-bearing on DIV2K.
-Fourth, on Quick Draw the same lever produces the headline result of the paper.
-The simplest block-wrapping (Blocked QFT) lifts the unblocked QFT from $24.35$~dB to $30.06$~dB ($+5.71$~dB), already exceeding BlockDCT ($26.63$~dB) by $+3.43$~dB.
-Blocked RichBasis reaches $32.60$~dB, exceeding BlockDCT by $+5.97$~dB and BD-PCA (the strongest classical baseline tested, at $27.57$~dB) by $+5.03$~dB.
+Three observations follow.
+First, the simplest block-wrapping (Blocked QFT, the QFT inner circuit applied per $8 \times 8$ tile) lifts the unblocked QFT by $+1.35$~dB on DIV2K and $+5.71$~dB on Quick Draw at $20\%$ keep, narrowing the gap to BlockDCT~$8 \times 8$ without changing the inner gates.
+Second, replacing the diagonal controlled-phase gates with richer two-qubit gates closes the residual gap: RichBasis ($H + U(4)$) and RealRichBasis ($H + O(4)$) land within $0.31$~dB of BlockDCT~$8 \times 8$ on DIV2K (the parity expected on an AR(1)-like source) and exceed every classical baseline tested on Quick Draw by $\ge +5.0$~dB, including the strongest baseline BD-PCA.
+Third, RealRichBasis matches RichBasis to within $0.05$~dB at less than half the parameter count: the imaginary parameters are not load-bearing on DIV2K.
 The block prior that ties JPEG on AR(1)-like DIV2K is therefore the principal vehicle for the $+6$~dB gap on non-AR(1) Quick Draw, not a separate mechanism.
 
 \subsection{Training dynamics}
@@ -559,10 +547,8 @@ The block prior that ties JPEG on AR(1)-like DIV2K is therefore the principal ve
 \label{fig:training_curves}
 \end{figure*}
 
-\Cref{fig:training_curves} shows that the parametric circuits, despite their $O(n^2)$ phase counts, reach a converged per-pixel MSE consistent with the rate-distortion ranking of \cref{tab:div2k_repr,tab:quickdraw_repr}.
-The validation loss is essentially flat past step ${\sim}700$ for every basis: gains beyond the 1008-step budget move the published numbers by at most a few hundredths of a dB.
-Among the unblocked bases, Entangled QFT converges fastest, consistent with cross-dimensional gradient flow being the load-bearing inductive bias.
-Among the block-wrapped bases, RichBasis and RealRichBasis reach a lower validation floor than the Cooley--Tukey-derived Blocked QFT on both datasets, and the floor itself sits roughly twice as low on Quick Draw as on DIV2K, which makes the headline $+6$~dB rate-distortion gap visible as training behaviour.
+\Cref{fig:training_curves} shows that the parametric circuits, despite their $O(n^2)$ phase counts, converge well within the 1008-step budget on both datasets: the validation loss is essentially flat past step ${\sim}700$, with gains beyond the budget moving the published numbers by at most a few hundredths of a dB.
+The trained block-wrapped bases (RichBasis, RealRichBasis) reach a validation floor roughly twice as low on Quick Draw as on DIV2K, manifesting the headline $+6$~dB rate-distortion gap as training behaviour.
 
 % ============================================================================
 % DISCUSSION
