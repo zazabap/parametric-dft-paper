@@ -456,6 +456,22 @@ The optimal block size is therefore a 2D function of (content statistics, operat
 \centering
 \begin{subfigure}[t]{\textwidth}
 \centering
+\includegraphics[width=\textwidth]{freqspace/quickdraw_freq_5method_img0.pdf}
+\subcaption{Frequency-domain magnitude (peak-normalized $\log_{10}\!|F|$, shared color scale).}
+\end{subfigure}\\[6pt]
+\begin{subfigure}[t]{\textwidth}
+\centering
+\includegraphics[width=\textwidth]{freqspace/quickdraw_recon_5method_img0.pdf}
+\subcaption{Reconstructions at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ (rows), with per-cell PSNR (dB) annotated.}
+\end{subfigure}
+\caption{Quick Draw test image \#0 (cat sketch), five representative methods. Leftmost cell is the original image; remaining columns are block-wrapped methods (RealRichBasis, BlockDCT) followed by full-image methods (QFT, DCT, FFT). The trained RealRichBasis preserves recognizable stroke topology at every $\rho$ while full-image FFT/DCT/QFT collapse to a blurred blob at $\rho = 0.05$. Full 13-method gallery in \cref{app:reconstruction_galleries}.}
+\label{fig:freqrecon_compact_qd}
+\end{figure*}
+
+\begin{figure*}[!htbp]
+\centering
+\begin{subfigure}[t]{\textwidth}
+\centering
 \includegraphics[width=\textwidth]{freqspace/spectra_5method_0390.pdf}
 \subcaption{Frequency-domain magnitude (peak-normalized $\log_{10}\!|F|$, shared color scale).}
 \end{subfigure}\\[6pt]
@@ -464,13 +480,14 @@ The optimal block size is therefore a 2D function of (content statistics, operat
 \includegraphics[width=\textwidth]{freqspace/reconstructions_5method_0390.pdf}
 \subcaption{Reconstructions at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ (rows), with per-cell PSNR (dB) annotated.}
 \end{subfigure}
-\caption{DIV2K test image \#390 (an architectural fa\c{c}ade), five representative methods. Block-wrapped on the left (RealRichBasis $8 \times 8$, BlockDCT $8 \times 8$); full-image on the right (QFT, DCT, FFT). The block prior recovers high-frequency detail invisible to full-image FFT/DCT at every retention ratio; within the block-wrapped pair, the trained RealRichBasis matches the hand-designed BlockDCT to the eye. Full 13-method gallery in \cref{app:reconstruction_galleries}.}
-\label{fig:freqrecon_compact}
+\caption{DIV2K test image \#390 (architectural fa\c{c}ade), same protocol and column order as \cref{fig:freqrecon_compact_qd}. Both block-wrapped methods preserve fine architectural detail visibly better than full-image FFT or DCT at every $\rho$; within the block-wrapped pair the trained RealRichBasis matches the hand-designed BlockDCT to the eye.}
+\label{fig:freqrecon_compact_div2k}
 \end{figure*}
 
-\Cref{fig:freqrecon_compact} translates the table numbers into visible quality on a representative DIV2K image: the block-wrapped methods (BlockDCT and the trained RealRichBasis) preserve fine architectural detail visibly better than full-image FFT or DCT at every $\rho$, and within the block-wrapped pair the trained basis is indistinguishable from the hand-designed BlockDCT to the eye.
-The 13-method gallery in \cref{app:reconstruction_galleries} confirms the same story across the remaining bases on this image and on Quick Draw: trained block-wrapped variants preserve recognizable stroke topology even at $\rho = 0.05$, where the full-image classical bases collapse to a blurred blob.
-The frequency-domain magnitudes in \cref{fig:freqrecon_compact}\,(a) and \cref{fig:freqrecon_div2k}\,(a) make the block-size axis visual: full-image DCT energy compacts into the top-left corner of a single tile, BlockDCT tiles that same compaction into sharp $8 \times 8$ blocks, and the trained QFT produces a visibly coarser, softer pattern consistent with a $16 \times 16$-pixel effective block.
+\Cref{fig:freqrecon_compact_qd,fig:freqrecon_compact_div2k} translate the table numbers into visible quality on one representative image per dataset.
+On Quick Draw, the trained block-wrapped basis (RealRichBasis) preserves recognizable stroke topology even at $\rho = 0.05$, where the full-image classical bases collapse to a blurred blob; on DIV2K, both block-wrapped methods (BlockDCT and the trained RealRichBasis) preserve fine architectural detail visibly better than full-image FFT or DCT at every $\rho$, and within the block-wrapped pair the trained basis is indistinguishable from the hand-designed BlockDCT to the eye.
+The 13-method gallery in \cref{app:reconstruction_galleries} confirms the same story across the remaining bases.
+The frequency-domain magnitudes in \cref{fig:freqrecon_compact_qd,fig:freqrecon_compact_div2k} make the block-size axis visual: full-image DCT energy compacts into the top-left corner of a single tile, BlockDCT tiles that same compaction into sharp $8 \times 8$ blocks, and the trained QFT produces a visibly coarser, softer pattern consistent with a $16 \times 16$-pixel effective block.
 The position the trained QFT occupies between DCT and BlockDCT is not accidental, as \cref{sec:emergence} shows.
 
 \subsection{Emergent block structure in the trained QFT}

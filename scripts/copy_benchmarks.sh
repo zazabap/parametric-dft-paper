@@ -71,6 +71,9 @@ QD_FREQ_CENTER="${QD_FREQ_CENTER:-0}"
 qd_freq_src="$PDFT_PY_RESULTS/quickdraw_pca_vs_block_dct/figures"
 copy_one "$qd_freq_src/freq_recon_grid_img${QD_FREQ_CENTER}_freq.pdf" "$OUTPUT_DIR/freqspace/quickdraw_freq_img${QD_FREQ_CENTER}.pdf"
 copy_one "$qd_freq_src/freq_recon_grid_img${QD_FREQ_CENTER}.pdf"      "$OUTPUT_DIR/freqspace/quickdraw_recon_img${QD_FREQ_CENTER}.pdf"
+# 5-method compact version (FFT, DCT, QFT, BlockDCT, RealRichBasis) for §5.3.
+copy_one "$qd_freq_src/freq_recon_grid_5method_img${QD_FREQ_CENTER}_freq.pdf" "$OUTPUT_DIR/freqspace/quickdraw_freq_5method_img${QD_FREQ_CENTER}.pdf"
+copy_one "$qd_freq_src/freq_recon_grid_5method_img${QD_FREQ_CENTER}.pdf"      "$OUTPUT_DIR/freqspace/quickdraw_recon_5method_img${QD_FREQ_CENTER}.pdf"
 
 echo "Block-size sweep figures (Python pdft-benchmarks) -> $OUTPUT_DIR/sweep"
 copy_one "$PDFT_PY_RESULTS/block_size_sweep/quickdraw/figures/sweep_quickdraw.pdf" \
