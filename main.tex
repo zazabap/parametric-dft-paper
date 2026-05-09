@@ -557,46 +557,31 @@ The trained block-wrapped bases (RichBasis, RealRichBasis) reach a validation fl
 \section{Discussion}
 \label{sec:discussion}
 
-The dominant performance variable in \cref{tab:div2k_repr} is block size, not basis.
-Moving from a full-image Fourier basis to a full-image cosine basis gains $\sim\!1.5$~dB at $20\%$ keep; moving from full-image DCT to $8 \times 8$ block-DCT gains another $\sim\!3.2$~dB.
-The trained basic-variant QFT, in our experiments, lands at an intermediate point at effective block size $16$ pixels (\cref{sec:emergence}); explicitly wrapping the same circuit in an $8 \times 8$ block prior closes the gap to BlockDCT to within $-0.3$~dB.
-This is consistent with decades of block-transform coding experience~\cite{wallace1992jpeg, britanak2007}: block-locality is a strong image-statistics prior, and coefficient selection benefits from being confined to local tiles.
+The dominant performance variable in \cref{tab:div2k_repr} is block size, not basis: full-image cosine over Fourier gains $\sim\!1.5$~dB at $20\%$ keep, and full-image DCT to $8 \times 8$ block-DCT gains another $\sim\!3.2$~dB. The trained basic-variant QFT lands at the intermediate effective block size of $16$ pixels (\cref{sec:emergence}); wrapping the same circuit in an $8 \times 8$ block prior closes the gap to BlockDCT to within $-0.3$~dB, consistent with decades of block-transform coding experience~\cite{wallace1992jpeg, britanak2007}.
 
-Two factors account for the residual $\sim\!3$~dB gap between the unblocked QFT and BlockDCT.
-The trained QFT's effective block is twice JPEG's, so its per-block coefficient budget is four times larger and intra-block compaction is correspondingly weaker. In addition, its block boundaries are soft: off-diagonal magnitudes of the frozen Hadamards sit at $\sim\!1\%$ rather than zero, so a small amount of cross-block mixing remains.
-The block-wrapped variants close both: the wrapper enforces exact boundaries, $b = 8$ matches the JPEG grid, and combined with the richer per-gate manifold of RichBasis the learned basis comes within $-0.3$~dB of BlockDCT.
+Two factors account for the residual $\sim\!3$~dB gap between the unblocked QFT and BlockDCT: the trained QFT's effective block is twice JPEG's (so its per-block budget is four times larger and intra-block compaction is correspondingly weaker), and its block boundaries are soft (\cref{sec:emergence}). The block-wrapped variants close both — exact boundaries plus the richer per-gate manifold of RichBasis — landing within $-0.3$~dB of BlockDCT.
 
-The four learned topologies of \cref{tab:circuits} sit within $\sim\!1$~dB of one another; the spread between Entangled QFT, TEBD, and MERA is $\leq 0.05$~dB.
-The choice of topology among reasonable variants thus contributes weakly compared to the block-size axis.
-Combining cross-dimensional coupling with an explicit block prior, so that block size becomes a learnable structural parameter rather than an emergent byproduct, is the natural follow-up.
+The four learned topologies of \cref{tab:circuits} sit within $\sim\!1$~dB of one another, with $\leq 0.05$~dB between Entangled QFT, TEBD, and MERA: topology choice among reasonable variants contributes weakly compared to the block-size axis. Combining cross-dimensional coupling with an explicit block prior, so that $b$ becomes a learnable structural parameter rather than an emergent byproduct, is the natural follow-up.
 
-Although we evaluate circuits classically, the parametric QFT structure maps directly to quantum hardware: the Entangled QFT requires only $n$ additional CPHASE gates beyond the standard QFT~\cite{luo2020yao, markov2008simulating}.
-The collapse of trained Hadamards to Pauli-like gates suggests a compilation benefit: on real hardware, frozen qubits could be replaced by their discrete Pauli equivalents, removing parameters and gate noise from those sites.
+Although we evaluate circuits classically, the parametric QFT structure maps directly to quantum hardware: the Entangled QFT adds only $n$ CPHASE gates beyond the standard QFT~\cite{luo2020yao, markov2008simulating}, and the collapse of trained Hadamards to Pauli-like gates suggests a compilation benefit — frozen qubits could be replaced by their discrete Pauli equivalents, removing parameters and gate noise from those sites.
 The framework is released as the open-source Python library \texttt{pdft} at \url{https://github.com/zazabap/pdft} (primary development target), with a companion Julia implementation \texttt{ParametricDFT.jl} at \url{https://github.com/nzy1997/ParametricDFT.jl}.
 
-A whole-frame counterexample (\cref{sec:per_image}) bounds the result: on images whose dominant correlations span the whole frame, all block-structured priors, whether hand-designed or learned, underperform full-image transforms.
-The QFT inherits BlockDCT's weakness by construction.
-Comparison against wavelets and learned dictionaries, and an explicit per-image adaptive block-selection mechanism, are natural follow-up directions.
+A whole-frame counterexample (\cref{sec:per_image}) bounds the result: on images whose dominant correlations span the whole frame, all block-structured priors underperform full-image transforms, and the QFT inherits this weakness by construction. Comparison against wavelets and learned dictionaries, and an explicit per-image adaptive block-selection mechanism, are natural follow-ups.
 
 % ============================================================================
 % CONCLUSION
 % ============================================================================
 \section{Conclusion}
 
-We have introduced a continuous parametric family of unitary image bases, obtained by relaxing the Hadamard and controlled-phase gates of the Cooley--Tukey FFT into free elements of $U(2)$ and $U(1)^4$ and optimizing on the Riemannian manifold of unitaries.
-The family contains the FFT, full-image DCT, and BlockDCT as distinguished points; gradient-based training moves the basis continuously between them.
+We have introduced a continuous parametric family of unitary image bases, obtained by relaxing the Hadamard and controlled-phase gates of the Cooley--Tukey FFT into free elements of $U(2)$ and $U(1)^4$ and optimizing on the Riemannian manifold of unitaries. The family contains the FFT, full-image DCT, and BlockDCT as distinguished points, and gradient-based training moves the basis continuously between them.
 
-The performance is predicted by source regime.
-On DIV2K natural images, well approximated by an AR(1)--Gaussian source where BlockDCT is asymptotically optimal, the learned $8 \times 8$ block-wrapped basis matches JPEG's BlockDCT to within $0.31$~dB at $20\%$ retention.
-On Quick Draw line drawings, where the AR(1) assumption fails, the same family outperforms every classical baseline tested (BlockDCT, BD-PCA, Block-FFT) by at least $+5.0$~dB at the same retention, with per-image training under five minutes on a single RTX~3090.
-Inspecting the trained gates of the basic-variant QFT shows the underlying structure: half of the Hadamard-role gates per dimension have collapsed to within $\sim\!1\%$ of Pauli matrices at convergence, factoring the trained transform into an effective $16 \times 16$-pixel block code without an explicit block prior.
+The performance is predicted by source regime. On DIV2K natural images, well approximated by an AR(1)--Gaussian source where BlockDCT is asymptotically optimal, the learned $8 \times 8$ block-wrapped basis matches JPEG's BlockDCT to within $0.31$~dB at $20\%$ retention. On Quick Draw line drawings, where the AR(1) assumption fails, the same family outperforms every classical baseline tested by at least $+5.0$~dB at the same retention, with per-image training under five minutes on a single RTX~3090.
 
 \paragraph{Beyond natural images.}
-The framework's only structural assumption is that signals admit a sparse representation in some unitary basis, a setting in which a fixed FFT or DCT is currently the standard tool.
-\emph{Medical imaging} relies on JPEG/JPEG-2000 for archive compression and on fixed Fourier sensing matrices for compressed-sensing MRI~\cite{lustig2007sparse}; replacing the fixed transform with one trained per anatomical site exposes the sensing matrix to gradient-based co-design with the reconstructor.
+The framework's only structural assumption is that signals admit a sparse representation in some unitary basis — a setting in which a fixed FFT or DCT is currently the standard tool.
+\emph{Medical imaging} relies on JPEG/JPEG-2000 for archive compression and on fixed Fourier sensing matrices for compressed-sensing MRI~\cite{lustig2007sparse}; a transform trained per anatomical site exposes the sensing matrix to gradient-based co-design with the reconstructor.
 \emph{Hyperspectral satellite imagery} uses spatial--spectral block-DCT codecs~\cite{rusyn2016hyperspectral} that ignore strong spectral correlations a learned per-band unitary can capture.
 \emph{Audio coding} is built around the modified DCT~\cite{princen1986mdct}; the parametric family extends naturally to 1D, providing the same continuous interpolation between full-signal and block-local windows that proved decisive on images.
-In each case the existing transform serves as a strong baseline with a published evaluation protocol, so the methodology transfers directly.
 
 % ============================================================================
 % ACKNOWLEDGMENTS
