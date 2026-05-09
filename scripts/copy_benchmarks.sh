@@ -54,17 +54,19 @@ copy_one "$(pick_recon "$dv_dir")"         "$OUTPUT_DIR/topology/div2k_8q_recons
 copy_one "$dv_dir/training_curves.png"     "$OUTPUT_DIR/topology/div2k_8q_training_curves.png"
 
 echo "Frequency-space analysis -> $OUTPUT_DIR/freqspace"
-# Use the generalized (newer) run as the canonical source of figures.
-# Override with FREQ_RUN=div2k_8q if you need the earlier run.
-FREQ_RUN="${FREQ_RUN:-div2k_8q_generalized}"
-# Centerpiece image for the frequency-space section.
+# DIV2K centerpiece image: prefer the 13-method gallery from pdft-benchmarks
+# (Python results tree). Override with FREQ_CENTER if you want a different
+# image index.
 FREQ_CENTER="${FREQ_CENTER:-0390}"
-freq_src="$ANALYSIS_DIR/$FREQ_RUN/$FREQ_CENTER"
-copy_one "$freq_src/frequency_spectra.pdf"      "$OUTPUT_DIR/freqspace/spectra_${FREQ_CENTER}.pdf"
-copy_one "$freq_src/frequency_spectra_3d.pdf"   "$OUTPUT_DIR/freqspace/spectra_3d_${FREQ_CENTER}.pdf"
-copy_one "$freq_src/kept_coefficient_masks.pdf" "$OUTPUT_DIR/freqspace/masks_${FREQ_CENTER}.pdf"
-copy_one "$freq_src/reconstructions.pdf"        "$OUTPUT_DIR/freqspace/reconstructions_${FREQ_CENTER}.pdf"
-copy_one "$freq_src/cumulative_energy.pdf"      "$OUTPUT_DIR/freqspace/cumulative_energy_${FREQ_CENTER}.pdf"
+div2k_freq_src="$PDFT_PY_RESULTS/div2k_8q_pca_vs_block_dct/figures"
+copy_one "$div2k_freq_src/freq_recon_grid_img${FREQ_CENTER}_freq.pdf" "$OUTPUT_DIR/freqspace/spectra_${FREQ_CENTER}.pdf"
+copy_one "$div2k_freq_src/freq_recon_grid_img${FREQ_CENTER}.pdf"      "$OUTPUT_DIR/freqspace/reconstructions_${FREQ_CENTER}.pdf"
+
+# Quick Draw centerpiece image: same convention.
+QD_FREQ_CENTER="${QD_FREQ_CENTER:-0}"
+qd_freq_src="$PDFT_PY_RESULTS/quickdraw_pca_vs_block_dct/figures"
+copy_one "$qd_freq_src/freq_recon_grid_img${QD_FREQ_CENTER}_freq.pdf" "$OUTPUT_DIR/freqspace/quickdraw_freq_img${QD_FREQ_CENTER}.pdf"
+copy_one "$qd_freq_src/freq_recon_grid_img${QD_FREQ_CENTER}.pdf"      "$OUTPUT_DIR/freqspace/quickdraw_recon_img${QD_FREQ_CENTER}.pdf"
 
 echo "Block-size sweep figures (Python pdft-benchmarks) -> $OUTPUT_DIR/sweep"
 copy_one "$PDFT_PY_RESULTS/block_size_sweep/quickdraw/figures/sweep_quickdraw.pdf" \
