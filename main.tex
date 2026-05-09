@@ -538,12 +538,10 @@ The simplest block-wrapping (Blocked QFT) lifts the unblocked QFT from $24.35$~d
 Blocked RichBasis reaches $32.60$~dB, exceeding BlockDCT by $+5.97$~dB and BD-PCA (the strongest classical baseline tested, at $27.57$~dB) by $+5.03$~dB.
 The block prior that ties JPEG on AR(1)-like DIV2K is therefore the principal vehicle for the $+6$~dB gap on non-AR(1) Quick Draw, not a separate mechanism.
 
-\FloatBarrier
-
 \subsection{Training dynamics}
 \label{sec:training_dynamics}
 
-\begin{figure*}[!tbp]
+\begin{figure*}[!tb]
 \centering
 \begin{subfigure}[t]{0.49\textwidth}
 \centering
@@ -569,7 +567,6 @@ Among the block-wrapped bases, RichBasis and RealRichBasis reach a lower validat
 % ============================================================================
 % DISCUSSION
 % ============================================================================
-\FloatBarrier
 
 \section{Discussion}
 \label{sec:discussion}
@@ -784,6 +781,8 @@ MERA's purpose in our comparison is to test whether \emph{multi-scale} connectiv
 \label{fig:topology_gallery}
 \end{figure*}
 
+\FloatBarrier
+
 \section{Block-size sweep}\label{appendix:block_size_sweep}
 
 We sweep the inner block size $b$ across $\{2, 4, 8, 16, 32, 64, 128\}$ on DIV2K and $\{2, 4, 8, 16\}$ on Quick Draw, at four retention ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$, training each block-wrapped trained-basis cell at the same 1008-step preset used for the headline tables (\cref{sec:setup}).
@@ -810,5 +809,38 @@ The within-family choice of inner topology contributes less than $2$~dB at the (
 
 \paragraph{Implementation note.}
 RealRichBasis and RichBasis at $b = 32$ on DIV2K (i.e.\ $\text{inner}\_m = \text{inner}\_n = 5$, ten qubits per inner block) emit $2(m + m^2) = 60$ fresh wire labels in their einsum representation, exceeding the 52-character \texttt{a-zA-Z} pool of the original \texttt{pdft} circuit builder. Eliminating the pool required replacing the single-string contraction with a stepped \texttt{jnp.tensordot} path that applies one gate per call and recycles labels across steps; the external API and Hadamard-first tensor ordering are preserved, so saved checkpoints remain compatible (\texttt{pdft} pull request~15).
+
+\section{Content-adaptive block size, HEVC-style}\label{appendix:adaptive_block}
+
+The \cref{appendix:block_size_sweep} sweep establishes that the optimal $b$ depends on both content statistics and operating $\rho$ — no single fixed $(basis, b)$ Pareto-dominates across content $\times$ rate.
+This is the empirical motivation for HEVC's content-adaptive transform-unit selection.
+We evaluate the per-image oracle form of that adaptivity: for each test image, choose the candidate $b \in \{4, 8, 16, 32\}$ (DIV2K) or $\{2, 4, 8, 16\}$ (Quick Draw) that minimises whole-image MSE at $\rho = 0.20$.
+The choice is made on the test image itself, so the reported number is an upper bound on practically deployable per-image adaptivity (a real encoder would have to encode the choice in side information at a small rate cost).
+
+We compare three families: BlockDCT (the HEVC-style classical baseline), BlockBD-PCA (the dataset-fitted classical), and the headline trained RealRichBasis. \Cref{fig:appendix_adaptive_per_image,tab:appendix_adaptive_per_image} summarise the result.
+
+\begin{figure*}[!htbp]
+  \centering
+  \includegraphics[width=0.95\textwidth]{adaptive/adaptive_per_image.pdf}
+  \caption{Per-image oracle adaptive block-size selection at $\rho = 0.20$, $n = 50$ test images. Left: DIV2K-8q. Right: Quick Draw, with a broken y-axis to accommodate the BlockDCT $b = 2$ outlier (54.9~dB at near-blank tiles, see \cref{appendix:block_size_sweep}). For each family, the lighter grey bar is the best fixed-$b$ over the test set; the coloured bar is the per-image oracle. The annotation above each adaptive bar is the gain in dB; the $b{=}$ label inside the fixed bar is the chosen fixed-best block size.}
+  \label{fig:appendix_adaptive_per_image}
+\end{figure*}
+
+\begin{table}[!htbp]
+\centering
+\caption{Per-image oracle adaptive block-size selection at $\rho = 0.20$, $n = 50$ test images. Source: \cref{fig:appendix_adaptive_per_image}.}
+\label{tab:appendix_adaptive_per_image}
+\input{tables/adaptive_per_image.tex}
+\end{table}
+
+Three observations follow.
+First, the gains are uniformly small: $\le 0.11$~dB across all six (dataset $\times$ family) cells. Per-image adaptivity is a bounded headroom, not a new regime.
+Second, the dataset-fitted classical (BlockBD-PCA) shows the \emph{largest} adaptivity gain on both datasets (+0.11 and +0.07~dB) — the data-fitted KLT can adapt at evaluation time without retraining, so heterogeneous test images benefit from per-image $b$ selection.
+Third, the trained RealRichBasis on DIV2K has the \emph{smallest} gain (+0.008~dB): 45 of the 50 test images select the same $b = 8$.
+The trained basis has implicitly absorbed per-image adaptivity through training, leaving little residual headroom for an oracle to extract.
+This is consistent with the basic-variant emergent block factorization of \cref{sec:emergence}: training pushes the basis toward the dataset's typical content scale.
+
+\paragraph{Per-CTU adaptive (out of scope).}
+HEVC's transform-unit RDO operates intra-image, choosing $b$ per coding tree unit rather than per whole image. The per-CTU oracle on DIV2K with classical inner transforms is a natural follow-up; it requires a different truncation protocol (per-CTU uniform top-$k$, not the global top-$k$ used throughout this paper) and is left to future work alongside the full rate-distortion comparison against entropy-coded codecs (HEVC HM/x265, JPEG-XL, learned codecs of~\cite{balle2017end}).
 
 \end{document}
