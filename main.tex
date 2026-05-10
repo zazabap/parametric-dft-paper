@@ -18,6 +18,14 @@
 \usepackage{xspace}
 \graphicspath{{figures/diagrams/}{figures/benchmarks/}}
 
+% Allow tall page-wide figures to share a page with text (otherwise quantumarticle's
+% default \dbltopfraction=0.7 pushes them onto their own float-only page).
+\renewcommand{\dbltopfraction}{0.9}
+\renewcommand{\dblfloatpagefraction}{0.8}
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\floatpagefraction}{0.8}
+\renewcommand{\textfraction}{0.07}
+
 % Theorem environments
 \newtheorem{definition}{Definition}
 \newtheorem{proposition}{Proposition}
@@ -277,6 +285,13 @@ The block structure observed in the trained basic-variant motivates offering an 
 % ============================================================================
 % TRAINING
 % ============================================================================
+\begin{figure*}[t!]
+  \centering
+  \includegraphics[width=\textwidth]{figures/banner-main.pdf}
+  \caption{End-to-end training pipeline. (1)~Natural images and sketches (DIV2K, Quick Draw) feed (2)~a Cooley--Tukey FFT relaxed into trainable unitaries on $U(2)$ and phases on $U(1)^4$, which (3)~Riemannian Adam optimizes against an MSE reconstruction loss with a straight-through gradient through top-$k$ truncation; (4)~at inference, the stored basis and the retained sparse coefficients reconstruct the image.}
+  \label{fig:banner}
+\end{figure*}
+
 \section{Training Objective and Optimization}
 \label{sec:training}
 
@@ -303,8 +318,6 @@ The top-$k$ selection ranks coefficients by a frequency-weighted score rather th
 \end{equation}
 where $d_{i,j} = \sqrt{(i - c_i)^2 + (j - c_j)^2}$ is the Euclidean distance from frequency bin $(i,j)$ to the DC bin $(c_i, c_j)$, and $d_{\max}$ is its maximum over the spectrum.
 Low-frequency coefficients receive up to a $2{\times}$ boost in retention score, consistent with empirical compressibility under perceptual quality metrics.
-The weighting only re-orders which coefficients survive top-$k$ truncation; it does not enter the reconstruction MSE directly.
-We do not isolate its contribution from that of the trained basis: a matched ablation against plain magnitude top-$k$ is left to follow-up work, as the focus of this paper is basis search rather than scoring.
 
 \subsection{Straight-through gradient for top-$k$}
 \label{sec:topk_grad}
@@ -375,7 +388,7 @@ The two datasets sit at distinct positions on the AR(1) source-statistics axis (
 \label{fig:ar1_histogram}
 \end{figure}
 
-All learned bases are trained per image using Riemannian Adam (\cref{sec:riemannian}) on the MSE loss (\cref{eq:mse_loss}) with $k = 10\%$ coefficients retained during training. The remaining hyperparameters (cosine LR schedule, batch size, validation split, seed) are listed in~\cref{app:benchmark}. Reported numbers are single-seed (seed = 42 throughout); seed variance has not been characterized in this paper and is left to follow-up.
+All learned bases are trained per image using Riemannian Adam (\cref{sec:riemannian}) on the MSE loss (\cref{eq:mse_loss}) with $k = 10\%$ coefficients retained during training. The remaining hyperparameters (cosine LR schedule, batch size, validation split, seed) are listed in~\cref{app:benchmark}.
 
 We report Peak Signal-to-Noise Ratio (PSNR; $10 \log_{10}(1/\text{MSE})$) at retention ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$, averaged over the 50-image test slice of each dataset.
 Every method evaluated here uses \emph{top-$k$} truncation: the $k = \lfloor \rho N \rfloor$ coefficients with the largest absolute magnitude per image are retained and the rest zeroed, matching how JPEG-style codecs entropy-code only the surviving coefficients.
@@ -399,9 +412,13 @@ We compare the seven learned bases against classical references on both datasets
 \Cref{tab:quickdraw_repr,tab:div2k_repr} report the headline result.
 The headline learned-blocked basis is RealRichBasis on DIV2K, where it leads the learned-blocked subgroup, and RichBasis on Quick Draw, where it edges past RealRichBasis.
 
+We first read off the DIV2K topology comparison.
+The four learned basic-variant topologies (QFT, Entangled QFT, TEBD, MERA) sit within ${\sim}0.4$~dB of one another at every keep ratio, with TEBD and MERA tied at the top (\cref{tab:div2k_repr}, unblocked-learned subgroup).
+The three additional learned bases produce 2D spectra and kept-coefficient masks that are visually indistinguishable from the separable QFT, so the figures in the remainder of this section show only the separable QFT as a representative member of the family.
+
 \begin{table*}[!tbp]
 \centering
-\caption{Mean PSNR (dB) on the $50$-image test slice of each dataset at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$. Each subtable is laid out side-by-side: unblocked, full-image transforms on the left and $8 \times 8$ block-wrapped transforms on the right. Within each side the trained PDFT bases (ours) appear above the classical baselines, and the largest PSNR in each keep-ratio column within that side is shown in \textbf{bold}.}
+\caption{Mean PSNR (dB) on the $50$-image test slice of each dataset at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$. Each subtable is laid out side-by-side: unblocked, full-image transforms on the left and $8 \times 8$ block-wrapped transforms on the right. Within each side the trained PDFT bases (ours) appear above the classical baselines. Per keep-ratio column, the overall best PSNR is shown in \textbf{bold} and the best entry in the cross-group runner-up family (PDFT or Classical, whichever does not contain the bold winner) is \underline{underlined}.}
 
 \begin{subtable}[t]{\textwidth}
 \centering
@@ -420,41 +437,37 @@ The headline learned-blocked basis is RealRichBasis on DIV2K, where it leads the
 \end{subtable}
 \end{table*}
 
-\begin{figure*}[!t]
+\begin{figure*}[!tb]
 \centering
 \begin{subfigure}[t]{\textwidth}
 \centering
-\includegraphics[width=\textwidth]{freqspace/quickdraw_freq_5method_img0.pdf}
+\includegraphics[width=0.79\textwidth]{freqspace/quickdraw_freq_5method_img0.pdf}
 \subcaption{Frequency-domain magnitude (peak-normalized $\log_{10}\!|F|$, shared color scale).}
 \end{subfigure}\\[6pt]
 \begin{subfigure}[t]{\textwidth}
 \centering
-\includegraphics[width=\textwidth]{freqspace/quickdraw_recon_5method_img0.pdf}
+\includegraphics[width=0.79\textwidth]{freqspace/quickdraw_recon_5method_img0.pdf}
 \subcaption{Reconstructions at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ (rows), with per-cell PSNR (dB) annotated.}
 \end{subfigure}
 \caption{Quick Draw test image \#0 (cat sketch), five representative methods. Leftmost cell is the original image; remaining columns are block-wrapped methods (RealRichBasis, BlockDCT) followed by full-image methods (QFT, DCT, FFT). The trained RealRichBasis preserves recognizable stroke topology at every $\rho$ while full-image FFT/DCT/QFT collapse to a blurred blob at $\rho = 0.05$. Full 13-method gallery in \cref{app:reconstruction_galleries}.}
 \label{fig:freqrecon_compact_qd}
 \end{figure*}
 
-\begin{figure*}[!t]
+\begin{figure*}[!tb]
 \centering
 \begin{subfigure}[t]{\textwidth}
 \centering
-\includegraphics[width=\textwidth]{freqspace/spectra_5method_0390.pdf}
+\includegraphics[width=0.79\textwidth]{freqspace/spectra_5method_0390.pdf}
 \subcaption{Frequency-domain magnitude (peak-normalized $\log_{10}\!|F|$, shared color scale).}
 \end{subfigure}\\[6pt]
 \begin{subfigure}[t]{\textwidth}
 \centering
-\includegraphics[width=\textwidth]{freqspace/reconstructions_5method_0390.pdf}
+\includegraphics[width=0.79\textwidth]{freqspace/reconstructions_5method_0390.pdf}
 \subcaption{Reconstructions at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ (rows), with per-cell PSNR (dB) annotated.}
 \end{subfigure}
 \caption{DIV2K test image \#390 (architectural fa\c{c}ade), same protocol and column order as \cref{fig:freqrecon_compact_qd}. Both block-wrapped methods preserve fine architectural detail visibly better than full-image FFT or DCT at every $\rho$; within the block-wrapped pair the trained RealRichBasis matches the hand-designed BlockDCT to the eye.}
 \label{fig:freqrecon_compact_div2k}
 \end{figure*}
-
-We first read off the DIV2K topology comparison.
-The four learned basic-variant topologies (QFT, Entangled QFT, TEBD, MERA) sit within ${\sim}0.4$~dB of one another at every keep ratio, with TEBD and MERA tied at the top (\cref{tab:div2k_repr}, unblocked-learned subgroup).
-The three additional learned bases produce 2D spectra and kept-coefficient masks that are visually indistinguishable from the separable QFT, so the figures in the remainder of this section show only the separable QFT as a representative member of the family.
 
 \subsection{The block-size axis: QFT, DCT and BlockDCT}
 \label{sec:blocksize}
@@ -477,8 +490,7 @@ Block-wrapping with richer within-block gates lifts the result by a further $+5.
 On non-AR(1) sources, the dominant lever is the within-block basis, not the block size: BlockDCT's hand-designed $8 \times 8$ cosine basis leaves roughly $6$~dB of sparsity on the table.
 
 \paragraph{Why $b = 8$, defended on this paper's data.}
-The four-effects decomposition above is at the headline $b = 8$.
-To defend that choice we ran a full sweep across $b \in \{2, 4, 8, 16, 32, 64, 128\}$ for the classical baselines and over the HEVC transform-unit set $\{4, 8, 16, 32\}$ (DIV2K) / $\{4, 8, 16\}$ (Quick Draw) for the trained block-wrapped bases, at four retention ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$, training each cell at the same 1{,}008-step preset (\cref{app:block_size_sweep}).
+To defend the headline $b = 8$ we ran a full sweep across $b \in \{2, 4, 8, 16, 32, 64, 128\}$ for the classical baselines and over the HEVC transform-unit set $\{4, 8, 16, 32\}$ (DIV2K) / $\{4, 8, 16\}$ (Quick Draw) for the trained block-wrapped bases, at four retention ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$, training each cell at the same 1{,}008-step preset (\cref{app:block_size_sweep}).
 At $\rho = 0.20$ on DIV2K, every dataset-fitted family (BlockDCT, BlockBD-PCA, RichBasis, RealRichBasis) peaks at $b = 8$, recovering the headline numbers in \cref{tab:div2k_repr} to $< 0.01$~dB.
 The peak migrates with $\rho$ in two clear directions: at lower $\rho$ on DIV2K (more aggressive compression), $b = 16$ wins for the classical bases and $b = 32$ for the trained bases, because a tiny coefficient budget is best spent on a few low-frequency modes of a wider window; on Quick Draw, BlockDCT \emph{decreases monotonically} with $b$ at $\rho \ge 0.15$ (the all-white-background regime makes small tiles trivially compressible), while the dataset-fitted bases (BlockBD-PCA, RealRichBasis) peak at $b = 4$.
 The optimal block size is therefore a 2D function of (content statistics, operating $\rho$); $b = 8$ is the empirical optimum at the paper's headline retention on natural-image content, the regime the headline tables actually evaluate.
@@ -507,8 +519,6 @@ While the representative image of \cref{tab:div2k_repr} reflects typical DIV2K t
 The clearest counterexample in our evaluation set is an image dominated by long-range, whole-frame correlations (\eg a sweeping landscape with no block-local texture).
 At 20\% keep, the four transforms on this counterexample achieve FFT 24.03, DCT 25.31, BlockDCT 25.99, QFT 24.21 dB (PSNR): the BlockDCT $-$ DCT gap shrinks from the $\sim\!+4$~dB test-set average to $+0.68$~dB, and this is the only image in our evaluation set where the learned QFT underperforms full-image DCT ($-1.10$~dB).
 The QFT's failure here is the same failure mode as BlockDCT, not a failure of training (\cref{sec:discussion}).
-
-\FloatBarrier
 
 \subsection{Adding an explicit block prior}
 \label{sec:blockprior_results}
@@ -672,18 +682,17 @@ Epochs / training images / test images & 60 / 500 / 50 \\
 \end{tabular}}
 \end{table}
 
-\FloatBarrier
 \section{Training dynamics}
 \label{app:training_dynamics}
 
-\begin{figure*}[!tb]
+\begin{figure*}[!htbp]
 \centering
-\begin{subfigure}[t]{\textwidth}
+\begin{subfigure}[t]{0.49\textwidth}
 \centering
 \includegraphics[width=\textwidth]{mse/quickdraw_loss_curve_1000.pdf}
-\subcaption{Quick Draw ($32 \times 32$, $m = n = 5$); MERA omitted, $m + n = 10$ is not a power of $2$.}
-\end{subfigure}\\[6pt]
-\begin{subfigure}[t]{\textwidth}
+\subcaption{Quick Draw ($32 \times 32$, $m = n = 5$)}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.49\textwidth}
 \centering
 \includegraphics[width=\textwidth]{mse/div2k_loss_curve_1000.pdf}
 \subcaption{DIV2K ($256 \times 256$, $m = n = 8$).}
@@ -695,7 +704,6 @@ Epochs / training images / test images & 60 / 500 / 50 \\
 \Cref{fig:training_curves} shows that the parametric circuits, despite their $O(n^2)$ phase counts, converge well within the 1{,}008-step budget on both datasets: the validation loss is essentially flat past step ${\sim}700$, with gains beyond the budget moving the published numbers by at most a few hundredths of a dB.
 The trained block-wrapped bases (RichBasis, RealRichBasis) reach a validation floor roughly twice as low on Quick Draw as on DIV2K, manifesting the headline $+6$~dB rate-distortion gap as training behavior.
 
-\FloatBarrier
 \section{Reconstruction galleries (all compared methods)}
 \label{app:reconstruction_galleries}
 
@@ -733,7 +741,6 @@ The trained block-wrapped bases (RichBasis, RealRichBasis) reach a validation fl
 \label{fig:freqrecon_div2k}
 \end{figure*}
 
-\FloatBarrier
 \section{Circuit topology details}
 \label{app:alt_topologies}
 
@@ -782,8 +789,6 @@ MERA's purpose in our comparison is to test whether \emph{multi-scale} connectiv
 \label{fig:topology_gallery}
 \end{figure*}
 
-\FloatBarrier
-
 \section{Block-size sweep}\label{app:block_size_sweep}
 
 We sweep the inner block size $b$ across $\{2, 4, 8, 16, 32, 64, 128\}$ on DIV2K and $\{2, 4, 8, 16\}$ on Quick Draw, at four retention ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$, training each block-wrapped trained-basis cell at the same 1{,}008-step preset used for the headline tables (\cref{sec:setup}).
@@ -818,7 +823,7 @@ This is the empirical motivation for HEVC's content-adaptive transform-unit sele
 We evaluate the per-image oracle form of that adaptivity: for each test image, choose the candidate $b \in \{4, 8, 16, 32\}$ (DIV2K) or $\{2, 4, 8, 16\}$ (Quick Draw) that minimises whole-image MSE at $\rho = 0.20$.
 The choice is made on the test image itself, so the reported number is an upper bound on practically deployable per-image adaptivity (a real encoder would have to encode the choice in side information at a small rate cost).
 
-We compare three families: BlockDCT (the HEVC-style classical baseline), BlockBD-PCA (the dataset-fitted classical), and the headline trained RealRichBasis. \Cref{fig:appendix_adaptive_per_image,tab:appendix_adaptive_per_image} summarize the result.
+We compare three families: BlockDCT (the HEVC-style classical baseline), BlockBD-PCA (the dataset-fitted classical), and the headline trained RealRichBasis. \Cref{fig:appendix_adaptive_per_image} summarizes the result.
 
 \begin{figure*}[!htbp]
   \centering
@@ -826,13 +831,6 @@ We compare three families: BlockDCT (the HEVC-style classical baseline), BlockBD
   \caption{Per-image oracle adaptive block-size selection at $\rho = 0.20$, $n = 50$ test images. Left: DIV2K-8q. Right: Quick Draw, with a broken y-axis to accommodate the BlockDCT $b = 2$ outlier (54.9~dB at near-blank tiles, see \cref{app:block_size_sweep}). For each family, the lighter grey bar is the best fixed-$b$ over the test set; the coloured bar is the per-image oracle. The annotation above each adaptive bar is the gain in dB; the $b{=}$ label inside the fixed bar is the chosen fixed-best block size.}
   \label{fig:appendix_adaptive_per_image}
 \end{figure*}
-
-\begin{table}[!htbp]
-\centering
-\caption{Per-image oracle adaptive block-size selection at $\rho = 0.20$, $n = 50$ test images. Source: \cref{fig:appendix_adaptive_per_image}.}
-\label{tab:appendix_adaptive_per_image}
-\input{tables/adaptive_per_image.tex}
-\end{table}
 
 Three observations follow.
 First, the gains are uniformly small: $\le 0.11$~dB across all six (dataset $\times$ family) cells. Per-image adaptivity is a bounded headroom, not a new regime.
