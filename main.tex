@@ -199,27 +199,43 @@ The parameter count remains $O(\log^2 N)$ in the image side $N = 2^m = 2^n$, and
 \section{Parametric Circuit Topologies}
 \label{sec:circuits}
 
-Each topology defines a parametric unitary transform $\TT(\boldsymbol{\theta}): \CC^{2^m \times 2^n} \to \CC^{2^m \times 2^n}$ over the same gate parameterization---Hadamard-like gates $H \in U(2)$ and controlled-phase gates $M = \diag(1, 1, 1, e^{i\phi}) \in U(1)^4$.
-Setting all parameters to their QFT values recovers the classical DFT.
-We organise the topologies into two subsections: the \emph{basic variants} (\cref{sec:basic_variants}) act on the full image as a single unitary, while the \emph{block-wrapped variants} (\cref{sec:block_wrapper}) tile the same circuits across $b \times b$ tiles of the image.
+This section defines the circuit topologies used in the experiments.
+A topology specifies the graph of trainable two-qubit phase gates on the row and column qubit registers.
+Unless otherwise stated, the local gate families are kept fixed: Hadamard-role gates are free elements of $U(2)$, and controlled-phase gates are diagonal phase
+gates $M=\diag(1,1,1,e^{i\phi})$.
+We organize the constructions into two subsections.
+The \emph{basic variants} (\cref{sec:basic_variants}) act on the full image as a single unitary and include the separable QFT, Entangled QFT, TEBD, and MERA-
+inspired topologies.
+The \emph{block-wrapped variants} (\cref{sec:block_wrapper}) introduce a block side length $b$ and apply a shared inner circuit independently to each $b \times
+b$ image block, making block locality an explicit structural prior.
 
 \subsection{Basic variants}
 \label{sec:basic_variants}
 
-The basic variants act on the full image as a single $2^m \times 2^n$ unitary; they differ only in how the controlled-phase chain is wired (\cref{tab:circuits}).
-The \emph{separable QFT} (\cref{sec:qft_basis}) directly parameterizes the tensor network of \cref{sec:gate_decomposition}, with $m + n$ Hadamard gates on $U(2)$ and $m(m-1)/2 + n(n-1)/2$ controlled-phase gates on $U(1)^4$, giving the product transform $\TT = F_m(\boldsymbol{\theta}_{\text{row}}) \otimes F_n(\boldsymbol{\theta}_{\text{col}})$.
-Setting all parameters to their QFT values recovers the classical DFT.
+The basic variants act on the full image as a single $2^m \times 2^n$ unitary; they compare the separable QFT baseline against one row--column extension and two
+within-axis connectivity controls (\cref{tab:circuits}).
+\paragraph{Separable QFT.}
+\label{sec:separable_qft}
+The separable QFT is the direct two-dimensional extension of the parametric circuit in \cref{sec:gate_decomposition}.
+It applies \emph{independent} learned QFT circuits to the row and column registers, with $m+n$ Hadamard-role gates on $U(2)$ and $m(m-1)/2+n(n-1)/2$ controlled-phase
+gates.
+The transform is the tensor product of the learned row and column circuits:
+$\TT = F_m(\boldsymbol{\theta}_{\text{row}}) \otimes F_n(\boldsymbol{\theta}_{\text{col}})$.
+At the QFT parameter point, it recovers the classical separable 2D DFT.
 
 \paragraph{Entangled QFT.}
-\label{sec:qft_basis}
-The separable QFT processes row and column dimensions independently, ignoring spatial correlations between them.
-Natural images carry strong cross-dimensional correlations (diagonal edges, radial textures), so we add $n$ entanglement gates $E_k = \diag(1, 1, 1, e^{i\phi_k})$ coupling the qubit pairs $(x_{n-k}, y_{n-k})$:
+\label{sec:entangled_qft}
+The separable QFT processes row and column registers independently, ignoring spatial correlations between them.
+Natural images carry strong cross-dimensional correlations, such as diagonal edges and radial textures.
+To give the transform a direct mechanism for these correlations, the Entangled QFT adds $n$ diagonal phase gates $E_k=\diag(1,1,1,e^{i\phi_k})$ between
+matched qubit pairs $(x_{n-k}, y_{n-k})$:
 \begin{align}
-  \TT_{\text{entangled}} &= U_{\text{entangle}} \cdot (F_n \otimes F_n), \nonumber \\
+  \TT_{\text{entangled}} &= U_{\text{entangle}} \cdot \TT_{\text{sep}}, \nonumber \\
   U_{\text{entangle}} &= \prod_{k=1}^n E_k.
   \label{eq:entangled_qft}
 \end{align}
-The construction adds only $n$ parameters, keeps the per-dimension cost at $O(N \log N)$, and reduces to the separable QFT at $\phi_k = 0$ (\cref{fig:entangled_qft}).
+Here $\TT_{\text{sep}}$ denotes the separable QFT transform.
+The construction adds only $n$ trainable phases and reduces to the separable QFT when all $\phi_k = 0$ (\cref{fig:entangled_qft}).
 
 \begin{figure}[!tbp]
 \centering
@@ -230,9 +246,14 @@ The construction adds only $n$ parameters, keeps the per-dimension cost at $O(N 
 
 \paragraph{TEBD and MERA controls.}
 \label{sec:alt_topologies}
-To stress-test the claim that cross-dimensional, all-to-all coupling is the decisive structural ingredient, we add two connectivity foils: a TEBD-style~\cite{vidal2004tebd} \emph{ring} (nearest-neighbor controlled-phase gates with wrap-around, $O(n)$ depth, $2n$ phase parameters total) and a MERA-inspired~\cite{vidal2007mera} \emph{hierarchical} circuit (disentanglers and isometries at increasing strides, $O(\log n)$ depth, $4(n-1)$ phase parameters).
-Both share the same $U(2)$ Hadamard layer as the QFT but replace its all-to-all phase chain with local or multi-scale connectivity.
-Their gate-level construction and circuit diagrams are deferred to \cref{app:alt_topologies}; we use them purely as controls in the topology comparison of \cref{sec:topology_div2k}.
+To isolate the role of direct row--column coupling, we compare against two connectivity controls that keep the same Hadamard-role gates but replace the QFT
+pattern of controlled-phase gates separately on the row and column registers.
+The TEBD-style control~\cite{vidal2004tebd} uses nearest-neighbor controlled-phase gates with wrap-around, forming a \emph{ring} on each register ($O(n)$ depth,
+$2n$ phase parameters total).
+The MERA-inspired control~\cite{vidal2007mera} uses \emph{hierarchical} disentangler/isometry-style controlled-phase gates at increasing strides ($O(\log n)$ depth,
+$4(n-1)$ phase parameters).
+Their gate-level construction and circuit diagrams are deferred to \cref{app:alt_topologies}; we use them in the topology comparison of
+\cref{sec:topology_div2k}.
 
 \begin{table}[tbp]
 \centering
@@ -243,11 +264,11 @@ Their gate-level construction and circuit diagrams are deferred to \cref{app:alt
 \toprule
 \textbf{Property} & \textbf{QFT} & \textbf{Ent.\ QFT} & \textbf{TEBD} & \textbf{MERA} \\
 \midrule
-Connectivity & all-to-all & all-to-all + XY & ring & hierarchical \\
+Connectivity & all-to-all & all-to-all + row--column & ring & hierarchical \\
 Phase params & $n(n-1)$ & $n(n-1) + n$ & $2n$ & $4(n-1)$ \\
 $U(2)$ gates & $2n$ & $2n$ & $2n$ & $2n$ \\
-Circuit depth & $O(n^2)$ & $O(n^2)$ & $O(n)$ & $O(n \log n)$ \\
-XY coupling & No & Yes & No & No \\
+Circuit depth & $O(n^2)$ & $O(n^2)$ & $O(n)$ & $O(\log n)$ \\
+Row--column coupling & No & Yes & No & No \\
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -255,8 +276,9 @@ XY coupling & No & Yes & No & No \\
 \subsection{Block-wrapped variants}
 \label{sec:block_wrapper}
 
-The four topologies above act on the full image as a single $2^m \times 2^n$ unitary.
-A second design axis, motivated directly by the block-DCT used in JPEG~\cite{wallace1992jpeg}, wraps any of these inner circuits in an explicit block partition: the image is reshaped into a grid of $b \times b$ tiles and the same parametric circuit $U(\boldsymbol{\theta})$ is applied independently to each tile,
+The topologies above act on the full image as a single $2^m \times 2^n$ unitary.
+A second design axis, motivated directly by the block-DCT used in JPEG~\cite{wallace1992jpeg}, wraps any inner circuit in an explicit block partition.
+The image is reshaped into a grid of $b \times b$ blocks, and the same parametric circuit $U(\boldsymbol{\theta})$ is applied independently to each block:
 \begin{equation}
   \TT_{\text{block}}(\boldsymbol{\theta})(\mathbf{x})_{[i,j]}
   = U(\boldsymbol{\theta})\, \mathbf{x}_{[i,j]},
@@ -264,8 +286,15 @@ A second design axis, motivated directly by the block-DCT used in JPEG~\cite{wal
   \label{eq:block_wrapper}
 \end{equation}
 where $\mathbf{x}_{[i,j]}$ is the $(i,j)$-th block.
-The wrapper is generic over the inner topology, so each of the four circuits in \cref{tab:circuits} has a blocked counterpart (Blocked QFT, Blocked Ent.\ QFT, Blocked TEBD, Blocked MERA).
-\Cref{fig:block_qft_circuit} shows the construction at the image level; \cref{fig:block_basis_circuits} sketches the inner-circuit variants used in the pdft-benchmarks harness (the standard QFT-style $H$~$+$~CP topology, RichBasis with $H + U(4)$ two-qubit gates, and RealRichBasis with $H + O(4)$).
+For $b = 2^r$, each block is interpreted as an $r$-qubit row register and an $r$-qubit column register.
+The parameters $\boldsymbol{\theta}$ are shared across all blocks, so the wrapper imposes a block-locality prior without introducing per-block parameters.
+The wrapper is generic over the inner topology, so each circuit in \cref{tab:circuits} has a blocked counterpart (Blocked QFT, Blocked Ent.\ QFT, Blocked TEBD,
+Blocked MERA).
+
+\Cref{fig:block_qft_circuit} shows the image-level construction.
+\Cref{fig:block_basis_circuits} sketches the inner-circuit variants used in the \texttt{pdft-benchmarks} harness: the standard QFT-style $H$~$+$~CP topology,
+RichBasis, and RealRichBasis.
+RichBasis replaces each diagonal controlled-phase gate by a full $U(4)$ two-qubit gate; RealRichBasis uses a real orthogonal $O(4)$ gate in the same role.
 
 \begin{figure*}[!tbp]
 \centering
@@ -285,9 +314,12 @@ The wrapper is generic over the inner topology, so each of the four circuits in 
 \label{fig:block_wrapper_combined}
 \end{figure*}
 
-The block size $b$ is the structural prior: $b = N$ recovers the full-image circuits already defined; $b = 8$ matches the JPEG block grid.
-The unblocked separable QFT, when trained on natural images, in fact \emph{discovers} a block structure on its own---several Hadamard-role gates collapse to near-Pauli matrices at convergence, freezing the corresponding qubits into classical block indices; this is shown in detail in \cref{sec:emergence}.
-The emergent block structure is one motivation for offering an explicit block prior as a complementary, hand-designed structural choice; the experiments in \cref{sec:topology_div2k,sec:blockprior_results} report results for both.
+The block side $b$ is the structural prior: setting $b$ to the image size $N$ recovers the full-image circuits, while $b = 8$ matches the JPEG block grid.
+The unblocked separable QFT, when trained on natural images, in fact \emph{discovers} a block structure on its own---several Hadamard-role gates collapse to
+near-Pauli matrices at convergence, freezing the corresponding qubits into classical block indices; this is shown in detail in \cref{sec:emergence}.
+The emergent block structure motivates the explicit block wrapper as a complementary, hand-designed structural choice.
+Thus topology and block size are treated as separate design axes: \cref{sec:topology_div2k} compares full-image topologies, while \cref{sec:blockprior_results}
+tests the effect of adding the block wrapper.
 
 % ============================================================================
 % TRAINING
