@@ -288,13 +288,16 @@ The image is reshaped into a grid of $b \times b$ blocks, and the same parametri
 where $\mathbf{x}_{[i,j]}$ is the $(i,j)$-th block.
 For $b = 2^r$, each block is interpreted as an $r$-qubit row register and an $r$-qubit column register.
 The parameters $\boldsymbol{\theta}$ are shared across all blocks, so the wrapper imposes a block-locality prior without introducing per-block parameters.
-The wrapper is generic over the inner topology, so each circuit in \cref{tab:circuits} has a blocked counterpart (Blocked QFT, Blocked Ent.\ QFT, Blocked TEBD,
-Blocked MERA).
+
+The wrapper is generic over the inner circuit.
+For the topology comparison, each circuit in \cref{tab:circuits} has a blocked counterpart (Blocked QFT, Blocked Ent.\ QFT, Blocked TEBD, Blocked MERA).
+For the block-prior experiments, we also evaluate richer within-block gate families used in the \texttt{pdft-benchmarks} harness.
+Blocked QFT keeps the standard QFT-style $H$~$+$~diagonal-$M$ structure inside each block.
+RichBasis replaces each diagonal controlled-phase gate by a full $U(4)$ two-qubit gate.
+RealRichBasis uses a real orthogonal $O(4)$ gate in the same role.
 
 \Cref{fig:block_qft_circuit} shows the image-level construction.
-\Cref{fig:block_basis_circuits} sketches the inner-circuit variants used in the \texttt{pdft-benchmarks} harness: the standard QFT-style $H$~$+$~CP topology,
-RichBasis, and RealRichBasis.
-RichBasis replaces each diagonal controlled-phase gate by a full $U(4)$ two-qubit gate; RealRichBasis uses a real orthogonal $O(4)$ gate in the same role.
+\Cref{fig:block_basis_circuits} sketches the within-block gate families: Blocked QFT, RichBasis, and RealRichBasis.
 
 \begin{figure*}[!tbp]
 \centering
