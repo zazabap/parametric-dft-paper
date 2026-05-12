@@ -436,7 +436,7 @@ First, the simplest block-wrapping (Blocked QFT, the QFT inner circuit applied p
 Second, replacing the diagonal controlled-phase gates with richer two-qubit gates closes the residual gap: RichBasis ($H + U(4)$) and RealRichBasis ($H + O(4)$) land within $0.31$~dB of BlockDCT~$8 \times 8$ on DIV2K (the parity expected on an AR(1)-like source) and exceed every classical baseline tested on Quick Draw by $\ge +5.0$~dB, including the strongest baseline BD-PCA.
 Third, RealRichBasis matches RichBasis to within $0.05$~dB at less than half the parameter count: the imaginary parameters are not load-bearing on DIV2K.
 The block prior that ties JPEG on AR(1)-like DIV2K is therefore the principal vehicle for the $+6$~dB gap on non-AR(1) Quick Draw, not a separate mechanism.
-Training converges well within the 1{,}008-step budget on both datasets, and the trained block-wrapped bases reach a validation floor on Quick Draw roughly twice as low as on DIV2K, manifesting the headline $+6$~dB rate-distortion gap as training behavior; see \cref{app:training_dynamics} for per-epoch loss curves.
+Training converges well within the 1{,}008-step budget on both datasets, and the trained block-wrapped bases settle to a validation floor below every unblocked baseline; the relative gap is largest on Quick Draw, manifesting the headline $+6$~dB rate-distortion advantage as training behavior; see \cref{app:training_dynamics} for per-epoch loss curves.
 
 % ============================================================================
 % DISCUSSION
@@ -695,12 +695,12 @@ Epochs / training images / test images & 60 / 500 / 50 \\
 \includegraphics[width=\textwidth]{mse/div2k_loss_curve_1000.pdf}
 \subcaption{DIV2K ($256 \times 256$, $m = n = 8$).}
 \end{subfigure}
-\caption{Training convergence at the 1{,}008-step budget. Per-epoch validation loss, normalized to $L/L_0$; each basis has a unique (color, marker) pair. Each subfigure shows the full-image bases (left) and $8 \times 8$ block-wrapped bases (right). RichBasis and RealRichBasis reach a floor (${\sim}0.27\,L_0$) on Quick Draw roughly twice as low as on DIV2K (${\sim}0.55\,L_0$).}
+\caption{Training convergence at the 1{,}008-step budget. Per-epoch validation MSE (absolute, per image) for all bases on each dataset; each basis has a unique (color, marker) pair. DIV2K additionally compares MERA. All curves are essentially flat past step ${\sim}300$, well within the 1{,}008-step budget; the trained block-wrapped bases (RichBasis, RealRichBasis) settle below every other basis on both datasets.}
 \label{fig:training_curves}
 \end{figure*}
 
-\Cref{fig:training_curves} shows that the parametric circuits, despite their $O(n^2)$ phase counts, converge well within the 1{,}008-step budget on both datasets: the validation loss is essentially flat past step ${\sim}700$, with gains beyond the budget moving the published numbers by at most a few hundredths of a dB.
-The trained block-wrapped bases (RichBasis, RealRichBasis) reach a validation floor roughly twice as low on Quick Draw as on DIV2K, manifesting the headline $+6$~dB rate-distortion gap as training behavior.
+\Cref{fig:training_curves} shows that the parametric circuits, despite their $O(n^2)$ phase counts, converge well within the 1{,}008-step budget on both datasets: the validation MSE is essentially flat past step ${\sim}300$, with gains beyond the budget moving the published numbers by at most a few hundredths of a dB.
+The trained block-wrapped bases (RichBasis, RealRichBasis) settle to a validation floor below every unblocked baseline on both datasets and below the Blocked QFT itself; the relative gap is largest on Quick Draw, manifesting the headline $+6$~dB rate-distortion advantage as training behavior.
 
 \section{Reconstruction galleries (all compared methods)}
 \label{app:reconstruction_galleries}
