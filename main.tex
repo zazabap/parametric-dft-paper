@@ -117,11 +117,14 @@ We organize the seven learned bases reported in this paper into two subsections:
 \label{sec:basic_variants}
 
 The basic variants act on the full image as a single $2^m \times 2^n$ unitary; they differ only in how the controlled-phase chain is wired (\cref{tab:circuits}).
-The \emph{separable QFT} (\cref{sec:qft_basis}) directly parameterizes the tensor network of \cref{sec:gate_decomposition}, with $m + n$ Hadamard gates on $U(2)$ and $m(m-1)/2 + n(n-1)/2$ controlled-phase gates on $U(1)^4$, giving the product transform $\TT = F_m(\boldsymbol{\theta}_{\text{row}}) \otimes F_n(\boldsymbol{\theta}_{\text{col}})$.
+
+\paragraph{Separable QFT.}
+\label{sec:separable_qft}
+The separable QFT directly parameterizes the tensor network of \cref{sec:gate_decomposition}, with $m + n$ Hadamard gates on $U(2)$ and $m(m-1)/2 + n(n-1)/2$ controlled-phase gates on $U(1)^4$, giving the product transform $\TT = F_m(\boldsymbol{\theta}_{\text{row}}) \otimes F_n(\boldsymbol{\theta}_{\text{col}})$.
 Setting all parameters to their QFT values recovers the classical DFT.
 
 \paragraph{Entangled QFT.}
-\label{sec:qft_basis}
+\label{sec:entangled_qft}
 The separable QFT processes row and column dimensions independently, ignoring spatial correlations between them.
 Natural images carry strong cross-dimensional correlations (diagonal edges, radial textures), so we add $n$ entanglement gates $E_k = \diag(1, 1, 1, e^{i\phi_k})$ coupling the qubit pairs $(x_{n-k}, y_{n-k})$ (indexed from the least-significant pair at $k=1$ to the most-significant at $k=n$):
 \begin{align}
@@ -153,11 +156,11 @@ Their gate-level construction and circuit diagrams are deferred to \cref{app:alt
 \toprule
 \textbf{Property} & \textbf{QFT} & \textbf{Ent.\ QFT} & \textbf{TEBD} & \textbf{MERA} \\
 \midrule
-Connectivity & all-to-all & all-to-all + XY & ring & hierarchical \\
+Connectivity & all-to-all & all-to-all + row--column & ring & hierarchical \\
 Phase params & $n(n-1)$ & $n(n-1) + n$ & $2n$ & $4(n-1)$ \\
 $U(2)$ gates & $2n$ & $2n$ & $2n$ & $2n$ \\
-Circuit depth & $O(n^2)$ & $O(n^2)$ & $O(n)$ & $O(n \log n)$ \\
-XY coupling & No & Yes & No & No \\
+Circuit depth & $O(n^2)$ & $O(n^2)$ & $O(n)$ & $O(\log n)$ \\
+Row--column coupling & No & Yes & No & No \\
 \bottomrule
 \end{tabular}}
 \end{table}
