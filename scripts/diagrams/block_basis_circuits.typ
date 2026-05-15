@@ -21,9 +21,13 @@
       scale: 100%,
       row-spacing: 0.55em,
       column-spacing: 0.45em,
-      lstick($q_1$), gate($H$), mqgate($O^((4))$, n: 2), 1, mqgate($O^((4))$, n: 3), 1, 1, 1, [\ ],
+      lstick($q_1$), gate($H$), mqgate($O^((4))$, n: 2), 1, mqgate(move(dy: -6pt)[$O^((4))$], n: 3), 1, 1, 1, [\ ],
       lstick($q_2$), 1, 1, 1, 1, gate($H$), mqgate($O^((4))$, n: 2), 1, [\ ],
       lstick($q_3$), 1, 1, 1, 1, 1, 1, gate($H$),
+      annotate((4.0, 5.0), 1.5, (cols, y) => {
+        let (x1, x2) = cols
+        (content: place(dx: x1, dy: y, line(length: x2 - x1, stroke: (paint: black, thickness: 0.6pt, dash: "dashed"))))
+      }, z: "above"),
     )
   ],
 
@@ -36,9 +40,13 @@
       scale: 100%,
       row-spacing: 0.55em,
       column-spacing: 0.45em,
-      lstick($q_1$), gate($H$), mqgate($U^((4))$, n: 2), 1, mqgate($U^((4))$, n: 3), 1, 1, 1, [\ ],
+      lstick($q_1$), gate($H$), mqgate($U^((4))$, n: 2), 1, mqgate(move(dy: -6pt)[$U^((4))$], n: 3), 1, 1, 1, [\ ],
       lstick($q_2$), 1, 1, 1, 1, gate($H$), mqgate($U^((4))$, n: 2), 1, [\ ],
       lstick($q_3$), 1, 1, 1, 1, 1, 1, gate($H$),
+      annotate((4.0, 5.0), 1.5, (cols, y) => {
+        let (x1, x2) = cols
+        (content: place(dx: x1, dy: y, line(length: x2 - x1, stroke: (paint: black, thickness: 0.6pt, dash: "dashed"))))
+      }, z: "above"),
     )
   ],
 

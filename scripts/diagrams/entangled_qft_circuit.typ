@@ -1,7 +1,7 @@
 #import "@preview/cetz:0.4.2": canvas, draw
 #set page(width: auto, height: auto, margin: 5pt)
 
-#let ngate(pos, n, name, text: none, width: 1, gap-y: 1, padding-y: 0.25) = {
+#let ngate(pos, n, name, text: none, width: 1, gap-y: 1, padding-y: 0.25, color: black) = {
   import draw: *
   let height = gap-y * (n - 1) + 2 * padding-y
 
@@ -9,7 +9,7 @@
   // wires, independent of the order in which gates and wires are issued.
   on-layer(1, {
     group(name: name, {
-      rect((rel: (- width/2, -height/2), to: pos), (rel: (width/2, height/2), to: pos), fill: white, name: "body")
+      rect((rel: (- width/2, -height/2), to: pos), (rel: (width/2, height/2), to: pos), fill: white, stroke: color, name: "body")
       if text != none{
         content("body", text)
       }
@@ -37,11 +37,12 @@
 
 #let egate(x, i, j, k, name: "E") = {
   import draw: *
-  circle((x, i), radius: 0.05, fill: black, stroke: none, name: name + "ctrl1")
-  circle((x, j), radius: 0.05, fill: black, stroke: none, name: name + "ctrl2")
-  ngate((x, (i+j)/2), 1, name, text:text(8pt)[$E_(#k)$], gap-y: 0.8, width: 0.5)
-  line(name + "ctrl1", name+".t")
-  line(name + "ctrl2", name+".b")
+  let col = rgb("#7F00FF")
+  circle((x, i), radius: 0.05, fill: col, stroke: none, name: name + "ctrl1")
+  circle((x, j), radius: 0.05, fill: col, stroke: none, name: name + "ctrl2")
+  ngate((x, (i+j)/2), 1, name, text:text(8pt, fill: col)[$E_(#k)$], gap-y: 0.8, width: 0.5, color: col)
+  line(name + "ctrl1", name+".t", stroke: col)
+  line(name + "ctrl2", name+".b", stroke: col)
 }
 
 #figure(canvas({
