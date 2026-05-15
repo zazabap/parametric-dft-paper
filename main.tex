@@ -95,7 +95,7 @@ Relaxing each Hadamard into a free element of $U(2)$ and each controlled-phase i
 The product manifold is searched with Riemannian Adam~\cite{kingma2015adam, becigneul2019riemannian} using Cayley retractions~\cite{wen2013feasible, li2020efficient} that preserve unitarity at any step size; top-$k$ non-differentiability is handled by a straight-through estimator~\cite{bengio2013estimating}, and the whole pipeline runs as a batched einsum contraction under automatic differentiation~\cite{innes2018dont, OMEinsum, luo2020yao, liao2019differentiable}.
 Three contributions follow.
 (i)~\textbf{A parametric quantum circuit family of unitary image bases with $O(N \log N)$ cost.} Relaxing each gate of the Cooley--Tukey FFT yields a continuous family on the product manifold $\prod_g \bigl(U(2) \times U(1)^4\bigr)$ that contains the FFT, the full-image DCT, and BlockDCT as distinguished points and inherits FFT-cost forward and backward passes; Riemannian optimization moves the basis continuously between them.
-(ii)~\textbf{Source-regime-dependent performance.} On DIV2K~\cite{div2k} natural images, well approximated by a stationary AR(1)--Gaussian source where the Ahmed--Jain DCT-to-KLT (Karhunen--Lo\`{e}ve Transform) equivalence is asymptotic~\cite{ahmed1974dct, jain1979sinusoidal}, the learned $8 \times 8$ block-wrapped basis matches JPEG's BlockDCT to within $0.31$~dB at $20\%$ retention, attaining parity with the asymptotically optimal classical reference. On Quick Draw~\cite{quickdraw} line drawings, where the AR(1) assumption fails, the same family outperforms every classical baseline tested (BlockDCT, BD-PCA, BlockFFT) by at least $+5.0$~dB at the same retention; per-image training takes approximately five minutes for a $500$-image training slice on a single RTX~3090. Gate-level inspection of the trained basic-variant QFT reveals the underlying structure: half of the Hadamard-role gates per dimension collapse to within $\sim\!1\%$ of Pauli matrices at convergence, factoring the trained transform into an effective $16 \times 16$-pixel block code without an explicit block prior.
+(ii)~\textbf{Source-regime-dependent performance.} On DIV2K~\cite{div2k} natural images, well approximated by a stationary AR(1)--Gaussian source where the Ahmed--Jain DCT-to-KLT (Karhunen--Lo\`{e}ve Transform) equivalence is asymptotic~\cite{ahmed1974dct, jain1979sinusoidal}, the learned $8 \times 8$ block-wrapped basis matches JPEG's BlockDCT to within $0.31$~dB at $20\%$ retention, attaining parity with the asymptotically optimal classical reference. On Quick Draw~\cite{quickdraw} line drawings, where the AR(1) assumption fails, the same family outperforms every classical baseline tested (BlockDCT, BD-PCA, BlockFFT) by at least $+5.0$~dB at the same retention; per-image training takes approximately five minutes for a $500$-image training slice on a single RTX~3090. Gate-level inspection of the trained basic-variant QFT reveals the underlying structure: half of the Hadamard-role gates per dimension collapse to within $\sim\!1\%$ of Pauli matrices at convergence, factoring the trained transform into an effective $16 \times 16$-pixel block code without an explicit block prior. Because the Blocked QFT lies inside the full QFT parameter space as the sub-manifold on which all outer-block gates are pinned to identity, this collapse can also be \emph{steered}: adding an L1-to-identity regularizer (\cref{sec:l1_reg}) drives the full QFT to a Blocked-QFT-equivalent basin on natural images and to the trivial identity transform on pixel-sparse sketches, performing adaptive block-size selection without a hand-chosen block partition (\cref{sec:emergence}).
 (iii)~\textbf{Open-source release.} The framework is implemented as the Python library \texttt{pdft} (the primary development target) and the companion Julia library \texttt{ParametricDFT.jl}, both of which combine tensor-network contraction, Riemannian optimization, and differentiable programming for unitary basis search.
 
 The rest of the paper proceeds as follows.
@@ -200,74 +200,56 @@ The block structure observed in the trained basic-variant motivates offering an 
 \section{Training Objective and Optimization}
 \label{sec:training}
 
-\subsection{Loss function}
+\subsection{Loss and frequency-weighted truncation}
 \label{sec:loss}
 
-All reported results are trained under the Mean Squared Error (MSE) reconstruction loss
+Training minimizes the post-truncation reconstruction MSE
 \begin{equation}
   \LL_{\text{MSE}}(\boldsymbol{\theta}) = \bigl\| \mathbf{x} - \TT(\boldsymbol{\theta})^{\dagger}\, \topk\!\bigl(\TT(\boldsymbol{\theta})\,\mathbf{x},\, k\bigr) \bigr\|_F^2,
   \label{eq:mse_loss}
 \end{equation}
-where $\TT(\boldsymbol{\theta})$ is the parametric unitary basis (so $\TT^\dagger = \TT^{-1}$) and $\topk(\cdot, k)$ retains the $k$ coefficients with the highest frequency-weighted score (\cref{sec:truncation}), zeroing the rest. The symbol $k$ here denotes the retention count rather than the qubit count of \cref{sec:gate_decomposition}.
-The objective is end-to-end: gradients flow from reconstruction error through the truncation layer (\cref{sec:topk_grad}) and back to the transform parameters.
-Two natural alternatives, the $\ell_1$ and $\ell_2$ norms applied directly to the transform output, are reported in \cref{app:alt_losses}.
-
-\subsection{Frequency-weighted truncation}
-\label{sec:truncation}
-
-The top-$k$ selection ranks coefficients by a frequency-weighted score rather than raw magnitude:
+where $\TT(\boldsymbol{\theta})$ is the parametric unitary basis and $\topk(\cdot, k)$ keeps the $k$ coefficients with the highest frequency-weighted score
 \begin{equation}
-  s_{i,j} = |y_{i,j}| \cdot (1 + w_{i,j}),
+  s_{i,j} = |y_{i,j}| \, (1 + w_{i,j}),
   \quad
-  w_{i,j} = 1 - \frac{d_{i,j}}{2\, d_{\max}},
+  w_{i,j} = 1 - \tfrac{d_{i,j}}{2\, d_{\max}},
+  \label{eq:freq_weight}
 \end{equation}
-where $d_{i,j} = \sqrt{(i - c_i)^2 + (j - c_j)^2}$ is the Euclidean distance from frequency bin $(i,j)$ to the DC bin $(c_i, c_j)$, and $d_{\max}$ is its maximum over the spectrum.
-Low-frequency coefficients receive up to a $2{\times}$ boost in retention score, consistent with empirical compressibility under perceptual quality metrics.
+$d_{i,j}$ being the Euclidean distance from bin $(i,j)$ to the DC bin and $d_{\max}$ its maximum.
+Low-frequency coefficients receive up to a $2{\times}$ boost, matching empirical compressibility under perceptual quality metrics; $\ell_1$ and $\ell_2$ alternatives evaluated during development are documented in \cref{app:alt_losses}.
 
 \subsection{Straight-through gradient for top-$k$}
 \label{sec:topk_grad}
 
-Top-$k$ selection is non-differentiable: the set $\mathcal{S} \subseteq \{1, \dots, N^2\}$ of retained indices changes discontinuously with $\mathbf{y}$.
-We adopt the \emph{straight-through estimator}~\cite{bengio2013estimating}, which passes gradients through retained coefficients and zeros them elsewhere:
+Top-$k$ selection is non-differentiable where the retained set $\mathcal{S} \subseteq \{1, \dots, N^2\}$ changes. We use the straight-through estimator~\cite{bengio2013estimating},
 \begin{equation}
-  \frac{\partial\, \topk(\mathbf{y}, k)_{i,j}}{\partial y_{i,j}} =
-  \begin{cases}
-    1 & (i,j) \in \mathcal{S}, \\
-    0 & \text{otherwise}.
-  \end{cases}
+  \frac{\partial\, \topk(\mathbf{y}, k)_{i,j}}{\partial y_{i,j}} = \mathbf{1}[(i,j) \in \mathcal{S}],
   \label{eq:ste}
 \end{equation}
-The estimator is justified by three observations.
-First, the exact Jacobian carries delta-function contributions at boundaries between mask configurations, which are unusable for gradient-based optimization.
-Second, $\mathcal{S}$ is locally stable along the optimization trajectory, so~\cref{eq:ste} agrees with the exact derivative away from those boundaries.
-Third, the resulting gradient correctly encodes the instruction \emph{adjust the retained coefficients to better approximate the signal}.
-Continuous relaxations of subset selection, such as the Gumbel-softmax reparameterization~\cite{jang2017categorical} and reparameterizable subset sampling~\cite{xie2019reparameterizable}, are alternative options we did not find necessary in this setting.
+which coincides with the exact derivative on the locally stable interior of each mask region and is unaffected by the delta-function contributions at the boundaries; smooth subset relaxations~\cite{jang2017categorical, xie2019reparameterizable} were not needed.
+
+\subsection{L1-to-identity regularization}
+\label{sec:l1_reg}
+
+To bias training toward bases whose gates depart from identity only where the data demand it, we add a Huber-smoothed L1 penalty on the per-gate Frobenius distance from the identity element:
+\begin{align}
+  \LL_{\text{total}}(\boldsymbol{\theta})
+    &= \LL_{\text{MSE}}(\boldsymbol{\theta}) + \lambda \, \mathcal{R}_{L_1}(\boldsymbol{\theta}),
+    \label{eq:total_loss} \\
+  \mathcal{R}_{L_1}(\boldsymbol{\theta})
+    &= \sum_{g} \sqrt{\bigl\| G_g(\boldsymbol{\theta}) - I_g \bigr\|_F^2 + \epsilon},
+    \qquad \epsilon = 10^{-12},
+    \label{eq:l1_reg}
+\end{align}
+where $G_g(\boldsymbol{\theta})$ is the trained tensor at gate slot $g$ and $I_g$ its kind-matched identity element ($I_2$ for Hadamard slots, controlled-phase at $\phi_k = 0$ for CP slots). The smoothing $\epsilon$ keeps the gradient finite at $G_g = I_g$ while agreeing with the Frobenius norm to leading order once $\| G_g - I_g \|_F \gtrsim 10^{-5}$. No block-aligned mask is imposed; sparsity emerges from training dynamics as gates either move appreciably or remain pinned at identity.
+
+\paragraph{Special case: collapse of the full QFT onto the Blocked QFT.}
+The Blocked QFT is the sub-manifold of the full QFT parameter space on which every outer-block gate is pinned to identity. Riemannian Adam reaches it from full-QFT init under two conditions: \textbf{(C1)}~initialization at or near the identity point (the qft-identity init), and \textbf{(C2)}~regularization strength $\lambda$ large enough to clear the basic-QFT basin (empirically $\lambda \sim 10$; $\lambda \lesssim 1$ stays at the basic-QFT minimum). Neither alone suffices: large $\lambda$ from a far-from-identity init pulls every gate broadly toward identity rather than selecting a sparse subset, and identity init without the prior settles at the basic-QFT basin (\cref{sec:emergence}).
 
 \subsection{Riemannian Adam}
 \label{sec:riemannian}
 
-The circuit parameters live on two matrix manifolds: the unitary group $U(2)$ for Hadamard-role gates and the phase torus $U(1)^4$ for controlled-phase gates.
-Their tangent spaces at $U \in U(2)$ and $\mathbf{z} \in U(1)^4$ are
-\begin{align}
-  T_U\, U(2) &= \{ U S : S^\dagger = -S \}, \\
-  T_{\mathbf{z}}\, U(1)^4 &= \{ i \boldsymbol{\theta} \circ \mathbf{z} : \boldsymbol{\theta} \in \RR^4 \},
-\end{align}
-following the standard matrix-manifold conventions~\cite{edelman1998geometry, absil2008optimization, boumal2023introduction, zhang2016first}.
-Given the Euclidean gradient $\nabla_E f$ supplied by automatic differentiation, the Riemannian gradient is the projection onto the tangent space:
-\begin{align}
-  \grad f(U) &= U \cdot \skew(U^\dagger \nabla_E f), \label{eq:grad_u2} \\
-  \grad f(\mathbf{z}) &= i \cdot \operatorname{Im}(\bar{\mathbf{z}} \circ \nabla_E f) \circ \mathbf{z}, \label{eq:grad_u1}
-\end{align}
-where $\skew(A) = (A - A^\dagger)/2$ extracts the skew-Hermitian part.
-Updates are pulled back to the manifold by a retraction $R$: the Cayley map for $U(2)$, which preserves unitarity exactly at any step size (\cref{app:cayley}), and elementwise normalization for $U(1)^4$.
-
-All reported results use Riemannian Adam~\cite{kingma2015adam, becigneul2019riemannian, kasai2019riemannian} as the optimizer.
-First- and second-moment estimates of the Riemannian gradient are maintained with $\beta_1 = 0.9$ and $\beta_2 = 0.999$, and momentum is parallel-transported between successive tangent spaces by projection (\cref{app:parallel_transport}).
-The bias-corrected update direction is $d_t = \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)$ with $\epsilon = 10^{-8}$.
-Step size and learning-rate schedule are listed in~\cref{app:benchmark}.
-
-Parameter-shift rules for hardware-quantum gradients~\cite{mitarai2018quantum, schuld2019evaluating} and the quantum natural gradient~\cite{stokes2020quantum} are not required here: classical simulation supplies Euclidean gradients via reverse-mode automatic differentiation at negligible cost.
-A vanilla Riemannian gradient-descent variant with Armijo line search, used during early development, is documented in \cref{app:armijo_gd}.
+The parameters live on $\prod_g \bigl(U(2) \times U(1)^4\bigr)$. We use Riemannian Adam~\cite{kingma2015adam, becigneul2019riemannian, kasai2019riemannian}: the Euclidean gradient supplied by automatic differentiation is projected onto the tangent space at each gate~\cite{edelman1998geometry, absil2008optimization, boumal2023introduction}, first- and second-moment estimates ($\beta_1 = 0.9$, $\beta_2 = 0.999$, $\epsilon = 10^{-8}$) are parallel-transported between successive tangent spaces (\cref{app:parallel_transport}), and updates are retracted back to the manifold via the Cayley map for $U(2)$ (which preserves unitarity at any step size, \cref{app:cayley}) and elementwise normalization for $U(1)^4$. Tangent-space derivations and the alternative Riemannian gradient-descent variant used in early development are collected in \cref{app:cayley,app:parallel_transport,app:armijo_gd}; the learning-rate schedule is in \cref{app:benchmark}.
 
 % ============================================================================
 % EXPERIMENTS
@@ -323,7 +305,7 @@ The three additional learned bases produce 2D spectra and kept-coefficient masks
 
 \begin{table*}[!tbp]
 \centering
-\caption{Mean PSNR (dB) on the $50$-image test slice of each dataset at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$. Each subtable is laid out side-by-side: unblocked, full-image transforms on the left and $8 \times 8$ block-wrapped transforms on the right. Within each side the trained PDFT bases (ours) appear above the classical baselines. Per keep-ratio column, the overall best PSNR is shown in \textbf{bold} and the best entry in the cross-group runner-up family (PDFT or Classical, whichever does not contain the bold winner) is \underline{underlined}.}
+\caption{Mean PSNR (dB) on the $50$-image test slice of each dataset at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$. Each subtable is laid out side-by-side: unblocked, full-image transforms on the left and $8 \times 8$ block-wrapped transforms on the right. Within each side the trained PDFT bases (ours) appear above the classical baselines. Per keep-ratio column on each side, the overall best PSNR is shown in \textbf{bold} and the best entry in the cross-group runner-up family (PDFT or Classical, whichever does not contain the bold winner) is \underline{underlined}. BD-PCA and Block-BD-PCA (bilateral 2D-PCA fitted on the training slice as $\Phi(\mathbf{x}) = U^\top \mathbf{x} V$) are omitted from the table as data-fitted reference points rather than deployable transforms, since they require per-dataset eigenbasis fitting; for completeness, at $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ they reach $18.63 / 21.99 / 24.87 / 27.57$~dB (BD-PCA) and $17.00 / 20.50 / 23.41 / 26.05$~dB (Block-BD-PCA) on Quick Draw, and $25.44 / 27.74 / 29.51 / 31.07$~dB (BD-PCA) and $26.13 / 29.30 / 31.68 / 33.77$~dB (Block-BD-PCA) on DIV2K.}
 
 \begin{subtable}[t]{\textwidth}
 \centering
@@ -417,6 +399,17 @@ A frozen qubit therefore behaves as a \emph{classical block index}, and the tran
 In each of the row and column dimensions, four of the eight Hadamard-role gates retain their Hadamard role and the remaining four freeze, predominantly to $Z$-like (with one $X$-like in the column dimension).
 The freezing is sharp rather than gradual: off-diagonal magnitudes of frozen gates sit at the ${\sim}1\%$ level, and all 56 controlled-phase gates retain their full $U(1)^4$ parameterization, so the intra-block transform remains rich.
 
+\paragraph{Turning emergence into a controllable mechanism.}
+The freezing pattern observed above arises spontaneously from MSE training and is therefore a feature of the loss landscape rather than a guarantee.
+Switching to the regularized objective~\cref{eq:total_loss} converts the observation into a reliable mechanism: with the L1-to-identity penalty active, training the full $\mathrm{QFT}(8,8)$ from a near-identity initialization reaches the Blocked-QFT $8 \times 8$ ceiling (\cref{tab:div2k_repr}, $32.26$~dB at $\rho = 0.20$) within $0.02$~dB at every retention rate $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ when $\lambda = 10$, while leaving only six gates appreciably non-identity ($\|G_g - I_g\|_F \gtrsim 1$, all of them inner-block Hadamard-slot rotations through $\pm \pi/4$; every controlled-phase slot stays pinned at $\phi_k = 0$ to within $10^{-4}$).
+Smaller $\lambda$ recovers the unregularized basin, and large $\lambda$ tightens the sparsity prior without destabilizing training, because the Blocked-QFT optimum has identically zero outer-gate contribution to $\mathcal{R}_{L_1}$.
+The trained operator is therefore PSNR-equivalent to Blocked QFT but structurally sparser: the L1 prior finds a basin that the manually block-wrapped construction of \cref{sec:block_wrapper} bounds from below but does not exhaust.
+The richer block-wrapped variants of \cref{tab:div2k_repr} (Blocked RichBasis, Blocked RealRichBasis) still sit $\sim\!1.4$~dB above this L1-discovered basin and remain the headline numerical result; L1-on-basic-QFT closes the basic/blocked gap, not the basic/rich gap.
+
+The same sweep on the pixel-sparse Quick Draw source produces a qualitatively different basin.
+At $\lambda \geq 1$ every gate collapses to the identity element within $10^{-4}$ in Frobenius distance, so $\TT_{\boldsymbol{\theta}}(\mathbf{x}) \approx \mathbf{x}$: the regularized objective discovers that no transform improves top-$k$ retention when the pixel domain is already as sparse as the data permit.
+Read together, the two outcomes show that the L1-to-identity prior performs adaptive block-size selection: on AR(1)-like content it selects the Blocked-QFT $8 \times 8$ basin; on sketch content it selects the trivial transform; the choice is made by the optimization, not by hand.
+
 \subsection{Where the block prior fails: per-image variance}
 \label{sec:per_image}
 
@@ -450,6 +443,8 @@ The dominant performance variable in \cref{tab:div2k_repr} is block size, not ba
 Two factors account for the residual $\sim\!3$~dB gap between the unblocked QFT and BlockDCT: the trained QFT's effective block is twice JPEG's (so its per-block budget is four times larger and intra-block compaction is correspondingly weaker), and its block boundaries are soft (\cref{sec:emergence}). The block-wrapped variants close both (exact boundaries plus the richer per-gate manifold of RichBasis), landing within $-0.3$~dB of BlockDCT.
 
 The four learned topologies of \cref{tab:circuits} sit within $\sim\!1$~dB of one another, with $\leq 0.05$~dB between Entangled QFT, TEBD, and MERA: topology choice among reasonable variants contributes weakly compared to the block-size axis. Combining cross-dimensional coupling with an explicit block prior, so that $b$ becomes a learnable structural parameter rather than an emergent byproduct, is the natural follow-up.
+
+The L1-to-identity regularizer of \cref{sec:l1_reg} closes a second loop on this story. The Blocked QFT is not a separate construction outside the QFT family but the sub-manifold on which every outer-block gate is pinned to identity; the explicit block wrapper of \cref{sec:block_wrapper} amounts to imposing that pinning by hand. Training the full QFT under~\cref{eq:total_loss} reaches the Blocked-QFT basin (and on natural images, a strictly sparser one with the same PSNR) without specifying the block partition in advance: $\lambda$ tunes the strength of the identity prior, and the data determine which gates fire. The same optimization yields the $b = 8$ Blocked-QFT basin on AR(1)-like natural images and the trivial identity transform on pixel-sparse sketches, so block-size selection becomes a learned scalar rather than a design choice. The richer inner gates of \cref{sec:block_wrapper} (RichBasis, RealRichBasis) sit a further ${\sim}1.4$~dB above this auto-discovered basin and remain the route to the headline numerical result; closing that residual gap from inside the basic-variant family would require lifting controlled-phase slots off their $U(1)^4$ manifold, which is outside the scope of the present regularizer.
 
 Although we evaluate circuits classically, the parametric QFT structure could in principle be implemented on quantum hardware: the Entangled QFT adds only $n$ controlled-phase gates beyond the standard QFT~\cite{luo2020yao, markov2008simulating}, and the collapse of trained Hadamards to Pauli-like gates suggests a compilation benefit, since frozen qubits could be replaced by their discrete Pauli equivalents, removing parameters and gate noise from those sites.
 
