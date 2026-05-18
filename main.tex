@@ -132,14 +132,7 @@ Natural images carry strong cross-dimensional correlations (diagonal edges, radi
   U_{\text{entangle}} &= \prod_{k=1}^n E_k.
   \label{eq:entangled_qft}
 \end{align}
-The construction adds only $n$ parameters, keeps the per-dimension cost at $O(N \log N)$, and reduces to the separable QFT at $\phi_k = 0$ (\cref{fig:entangled_qft}).
-
-\begin{figure}[!tbp]
-\centering
-\includegraphics[width=\columnwidth]{entangled_qft_circuit.pdf}
-\caption{Entangled QFT circuit for $n=4$ qubits per dimension. Row qubits $x_k$ and column qubits $y_k$ each pass through independent QFT circuits (Hadamard gates $H$ and controlled-phase gates $M_j$). Entanglement gates $E_k$ couple corresponding row--column pairs, introducing cross-dimensional correlations.}
-\label{fig:entangled_qft}
-\end{figure}
+The construction adds only $n$ parameters, keeps the per-dimension cost at $O(N \log N)$, and reduces to the separable QFT at $\phi_k = 0$ (bottom-left panel of \cref{fig:banner}).
 
 \paragraph{TEBD and MERA controls.}
 \label{sec:alt_topologies}
@@ -177,14 +170,7 @@ A second design axis, motivated directly by the $8 \times 8$ block-based DCT use
   \label{eq:block_wrapper}
 \end{equation}
 where $\mathbf{x}_{[i,j]}$ is the $(i,j)$-th block.
-The wrapper is generic over the inner topology. We report three block-wrapped bases at $b = 8$, organized as a hierarchy of within-block parameter richness (\cref{fig:block_basis_circuits}): the Cooley--Tukey-derived \emph{Blocked QFT} ($15$ real params/dim) recovers the QFT structure inside each tile; \emph{RichBasis} ($H + U(4)$, $57$ params/dim) replaces each two-qubit gate with a free $U(4)$; and the headline \emph{RealRichBasis} ($H + O(4)$, $21$ params/dim) constrains those gates to real-orthogonal $O(4)$, matching RichBasis at half the parameter count.
-
-\begin{figure}[!tbp]
-\centering
-\includegraphics[width=\columnwidth]{block_basis_circuits.pdf}
-\caption{Block-wrapped parametric basis (\cref{sec:block_wrapper}) viewed as a hierarchy on the inner $b \times b$ within-block transform ($m = 3$ qubits/dim shown). Top: RealRichBasis ($H + O^{(4)}$, $21$ real params/dim) is the headline learned basis. Extending each two-qubit gate $O^{(4)} \to U^{(4)}$ recovers RichBasis ($57$ params/dim); collapsing $U^{(4)}$ to a diagonal controlled-phase $M$ recovers the Cooley--Tukey-derived Blocked QFT ($15$ params/dim). Setting $b$ to the image side reproduces the full-image circuits of \cref{tab:circuits}; setting $b = 8$ matches JPEG's BlockDCT.}
-\label{fig:block_basis_circuits}
-\end{figure}
+The wrapper is generic over the inner topology. We report three block-wrapped bases at $b = 8$, organized as a hierarchy of within-block parameter richness: the Cooley--Tukey-derived \emph{Blocked QFT} ($15$ real params/dim) recovers the QFT structure inside each tile; \emph{RichBasis} ($H + U(4)$, $57$ params/dim; bottom-right panel of \cref{fig:banner}) replaces each two-qubit gate with a free $U(4)$; and the headline \emph{RealRichBasis} ($H + O(4)$, $21$ params/dim) constrains those gates to real-orthogonal $O(4)$, matching RichBasis at half the parameter count. The full hierarchy diagram is deferred to \cref{fig:block_basis_hierarchy}.
 
 The block size $b$ is the structural prior: $b = N$ recovers the full-image circuits already defined; $b = 8$ matches the JPEG block grid.
 The unblocked separable QFT, after training on natural images, exhibits a block-structured factorization: several Hadamard-role gates have collapsed to near-Pauli matrices at convergence, leaving the corresponding qubits acting as classical block indices, as detailed in \cref{sec:emergence}.
@@ -196,7 +182,7 @@ The block structure observed in the trained basic-variant motivates offering an 
 \begin{figure*}[t!]
   \centering
   \includegraphics[width=\textwidth]{figures/banner-main.pdf}
-  \caption{End-to-end training pipeline. (1)~Natural images and sketches (DIV2K, Quick Draw) feed (2)~a Cooley--Tukey FFT relaxed into trainable unitaries on $U(2)$ and phases on $U(1)^4$, which (3)~Riemannian Adam optimizes against an MSE reconstruction loss with a straight-through gradient through top-$k$ truncation; (4)~at inference, the stored basis and the retained sparse coefficients reconstruct the image.}
+  \caption{Main diagram. Top row: end-to-end training pipeline, where natural images and sketches (DIV2K, Quick Draw) feed a Cooley--Tukey FFT relaxed into trainable unitaries on $U(2)$ and phases on $U(1)^4$; Riemannian Adam optimizes an MSE reconstruction loss with a straight-through gradient through top-$k$ truncation; and inference stores the learned basis plus retained sparse coefficients for reconstruction. Bottom-left: Entangled QFT circuit for $n=4$ qubits per dimension, with row--column gates $E_k$ introducing cross-dimensional correlations. Bottom-right: the block-wrapped RichBasis within-block transform.}
   \label{fig:banner}
 \end{figure*}
 
@@ -331,12 +317,12 @@ The three additional learned bases produce 2D spectra and kept-coefficient masks
 \centering
 \begin{subfigure}[t]{\textwidth}
 \centering
-\includegraphics[width=0.79\textwidth]{freqspace/quickdraw_freq_5method_img0.pdf}
+\includegraphics[width=\textwidth]{freqspace/quickdraw_freq_5method_img0.pdf}
 \subcaption{Frequency-domain magnitude (peak-normalized $\log_{10}\!|F|$, shared color scale).}
 \end{subfigure}\\[6pt]
 \begin{subfigure}[t]{\textwidth}
 \centering
-\includegraphics[width=0.79\textwidth]{freqspace/quickdraw_recon_5method_img0.pdf}
+\includegraphics[width=\textwidth]{freqspace/quickdraw_recon_5method_img0.pdf}
 \subcaption{Reconstructions at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ (rows), with per-cell PSNR (dB) annotated.}
 \end{subfigure}
 \caption{Quick Draw test image \#0 (cat sketch), five representative methods. Leftmost cell is the original image; remaining columns are block-wrapped methods (RealRichBasis, BlockDCT) followed by full-image methods (QFT, DCT, FFT). The trained RealRichBasis preserves recognizable stroke topology at every $\rho$ while full-image FFT/DCT/QFT collapse to a blurred blob at $\rho = 0.05$. Full 13-method gallery in \cref{app:reconstruction_galleries}.}
@@ -347,13 +333,13 @@ The three additional learned bases produce 2D spectra and kept-coefficient masks
 \centering
 \begin{subfigure}[t]{\textwidth}
 \centering
-\includegraphics[width=0.79\textwidth]{freqspace/spectra_5method_0390.pdf}
+\includegraphics[width=\textwidth]{freqspace/spectra_5method_0390.pdf}
 \subcaption{Frequency-domain magnitude (peak-normalized $\log_{10}\!|F|$, shared color scale).}
 \end{subfigure}\\[6pt]
 \begin{subfigure}[t]{\textwidth}
 \centering
-\includegraphics[width=0.79\textwidth]{freqspace/reconstructions_5method_0390.pdf}
-\subcaption{Reconstructions at four keep ratios $\rho \in \{0.05, 0.10, 0.15, 0.20\}$ (rows), with per-cell PSNR (dB) annotated.}
+\includegraphics[width=\textwidth]{freqspace/reconstructions_5method_0390.pdf}
+\subcaption{Reconstructions at four keep ratios $\rho \in \{0.01, 0.02, 0.05, 0.10\}$ (rows), with per-cell PSNR (dB) annotated.}
 \end{subfigure}
 \caption{DIV2K test image \#390 (architectural fa\c{c}ade), same protocol and column order as \cref{fig:freqrecon_compact_qd}. Both block-wrapped methods preserve fine architectural detail visibly better than full-image FFT or DCT at every $\rho$; within the block-wrapped pair the trained RealRichBasis matches the hand-designed BlockDCT to the eye.}
 \label{fig:freqrecon_compact_div2k}
@@ -784,6 +770,13 @@ MERA's purpose in our comparison is to test whether \emph{multi-scale} connectiv
 \caption{The three block-wrapped trained-basis topologies at Quick Draw geometry ($m = n = 5$). Blocked QFT ($I_4 \otimes F_3$ per dimension, 30 params), RichBasis ($I_4 \otimes U^{(4)}$ inner, 108 params), and RealRichBasis ($I_4 \otimes O^{(4)}$ inner, 42 params; the headline learned basis).}
 \label{fig:topology_gallery}
 \end{figure*}
+
+\begin{figure}[!tbp]
+\centering
+\includegraphics[width=\columnwidth]{block_basis_circuits.pdf}
+\caption{Block-wrapped parametric basis hierarchy on the inner $b \times b$ within-block transform ($m = 3$ qubits/dim shown). RealRichBasis ($H + O^{(4)}$, 21 real params/dim) is the headline learned basis. Extending each two-qubit gate $O^{(4)} \to U^{(4)}$ recovers RichBasis (57 params/dim); collapsing $U^{(4)}$ to a diagonal controlled-phase $M$ recovers the Cooley--Tukey-derived Blocked QFT (15 params/dim).}
+\label{fig:block_basis_hierarchy}
+\end{figure}
 
 \section{Block-size sweep}\label{app:block_size_sweep}
 
